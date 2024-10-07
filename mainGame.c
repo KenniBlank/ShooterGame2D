@@ -477,8 +477,6 @@ void bulletCollisionSystem(void){
                 removeIndex[totalremove++] = i;
                 anyCollision = true;
                 zombies[j].health -= DAMAGE_BY_BULLET;
-                printf("collision: zombie[%d] (%d, %d) with size (50, %d), bullet[%d] (%f, %f) with size (10, 10)\n",
-                       j, zombies[j].x, zombies[j].y, ActualSpriteHeight, i, bullets[i].x, bullets[i].y);
                 break;
             }
         }
