@@ -34,7 +34,11 @@ bool canJump = true;
 float_t playerHealth = 100.0;
 bool playerDead = false;
 
-unsigned short int zombieCount = 3; // 10000 is max zombie that should be rendered, WHY? Just cause
+bool playerOnGround = false;
+float lastTimeOfPlayerOnGround = 0;
+bool followPlayer = false;
+
+int zombieCount = 0; // MAX_ZOMBIES/2 is max zombie that should be rendered one time at the screen, WHY? I dont know, try to fix this bug if you can. Open Challenge
 float zombie_Y;
 typedef struct {
     int x, y;           // Position
@@ -44,6 +48,7 @@ typedef struct {
     bool attackPlayer;     // If zombie is attacking the player
     bool idle;             // If zombie is idle
     float last_frame_time;
+    bool used;
 } Zombie;
 Zombie zombies[MAX_ZOMBIES];
 
@@ -57,6 +62,7 @@ unsigned short int bulletCount = 0;
 
 int InitializeWindow(void);
 int SetUp(void);
+    void spawnZombies(int numberOfZombies);
 void ProcessInput(void);
 void Update(void);
     void bulletData(int X, int Y, bool facingDirection);
@@ -64,6 +70,7 @@ void Render(void);
     void zombieRender(void);
     void playerRender(void);
         void bulletRender(void);
+        void gameOver(void);
     bool healthBar(int x, int y, float health, bool Player);
 void DestroyWindow(void);
 
@@ -171,9 +178,34 @@ int SetUp(void){
     if (zombieCount > (MAX_ZOMBIES / 2)) {
         zombieCount = MAX_ZOMBIES/2;
     }
+    spawnZombies(1);
+    return true;
+}
 
-    for (int i = 0; i < zombieCount; i++) {
-        zombies[i].x = WINDOW_WIDTH - 100 - (rand() % (500)); // SpawnPoint
+void spawnZombies(int numberOfZombies){
+    float factor = 0;
+    int count = 0;
+    if (zombieCount > MAX_ZOMBIES / 2)
+        return;
+    for (int i = 0; i < MAX_ZOMBIES; i++) {
+        if (zombies[i].used == true)
+            continue;
+
+        if (count >= numberOfZombies)
+            return;
+
+        if (rand() % 2 == 1)
+            factor = -1;
+        else
+            factor = 1;
+        float value = player_X + factor * (rand() % (100) + (float)WINDOW_WIDTH / 5);
+
+        if (value < -((float)WINDOW_WIDTH / 5))
+            value = -100;
+        else if(value > WINDOW_WIDTH + ((float)WINDOW_WIDTH / 5))
+            value = WINDOW_WIDTH + 100;
+
+        zombies[i].x = value;
         zombies[i].y = WINDOW_HEIGHT - ground_height - SPRITE_HEIGHT;
         zombies[i].health = 100.0f;
         zombies[i].current_frame = 0;
@@ -181,8 +213,10 @@ int SetUp(void){
         zombies[i].attackPlayer = false;
         zombies[i].idle = true;
         zombies[i].last_frame_time = SDL_GetTicks();
+        zombies[i].used = true;
+        zombieCount++;
+        count++;
     }
-    return true;
 }
 
 // Function to process keyboard input
@@ -220,9 +254,6 @@ void ProcessInput(void){
                 case SDLK_k:
                     debug = !debug;
                     break;
-                case SDLK_l:
-                    zombies[0].health = 0;
-                    break;
             }
             break;
         case SDL_KEYUP:
@@ -252,15 +283,18 @@ void ProcessInput(void){
 float jumpVelocity = -400.0f;
 float velocityY = 0.0f;
 float gravity = 980.0f; // 9.8m/s is earth's gravity i think
+float zombie_frame_time = 0;
 
 void Update(void) {
-    if (zombieCount > (MAX_ZOMBIES/2))
-        zombieCount = MAX_ZOMBIES / 2;
-
     // IMP: DELAY LOGIC, 60 fps for now.
     int time_to_wait = FRAME_TARGET_TIME - (SDL_GetTicks() - last_frame_time);
     if (time_to_wait > 0 && time_to_wait <= FRAME_TARGET_TIME)
         SDL_Delay(time_to_wait);
+
+    if (SDL_GetTicks() - zombie_frame_time > (1000)){ //spawn one zombie every 4 - 10 sec
+        spawnZombies(1);
+        zombie_frame_time = SDL_GetTicks();
+    }
 
     delta_time = (SDL_GetTicks() - last_frame_time) / 1000.0f;
     last_frame_time = SDL_GetTicks();
@@ -271,7 +305,21 @@ void Update(void) {
         player_Y = WINDOW_HEIGHT - ground_height - SPRITE_HEIGHT;
         velocityY = 0;
         canJump = true;
+        playerOnGround = true;
+        followPlayer = true;
+        lastTimeOfPlayerOnGround = SDL_GetTicks();
     }
+
+    if (playerDead)
+        gameOver();
+
+    // Healing Ability
+    playerHealth += delta_time * 5;
+    if (playerHealth > 100)
+        playerHealth = 100;
+
+    if (SDL_GetTicks() - lastTimeOfPlayerOnGround > 1000) // This means that the player is above the zombie
+        followPlayer = false;
 
     if (zombie_Y >= WINDOW_HEIGHT - ground_height - SPRITE_HEIGHT)
         zombie_Y = WINDOW_HEIGHT - ground_height - SPRITE_HEIGHT;
@@ -526,6 +574,13 @@ void bulletRender(void){
     bulletCollisionSystem(); // Called properly
 };
 
+void gameOver(void){
+    SDL_SetRenderDrawColor(Renderer, 0, 0, 0, 0);
+
+    // SDL_Delay(10 * 1000);
+    game_is_running = false;
+}
+
 int i = 0;
 int zombie_X = WINDOW_WIDTH - 100;
 SDL_RendererFlip flip;
@@ -587,7 +642,6 @@ void zombieRender(void) {
 
         // Movement logic based on player's position
         int dist_To_player = player_X - zombie->x;
-        float movementSpeed = delta_time * 100;
 
         SDL_Rect dstRect = {
             zombie->x,
@@ -601,14 +655,19 @@ void zombieRender(void) {
                 zombie->attackPlayer = true;
                 flip = (dist_To_player < 0) ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE;
             }
-        } else if (abs(dist_To_player) > 25 && abs(dist_To_player) < ((int)(WINDOW_WIDTH / 2) * 1.2) && (player_Y - zombie->y >= -40)) {
+        } else if (abs(dist_To_player) > 25 && abs(dist_To_player) < ((int)(WINDOW_WIDTH / 2) * 1.2) && followPlayer) {
             zombie->attackPlayer = false;
             zombie->idle = false;
+            int resultOfRandom = rand() % 100 + 50;
+            float movementSpeed = delta_time * resultOfRandom;
             if (dist_To_player < -25)
-                zombie->x -= movementSpeed * (float)(-dist_To_player) / abs(dist_To_player) - delta_time * 50;
+                zombie->x -= movementSpeed * (float)(-dist_To_player) / abs(dist_To_player) - delta_time * resultOfRandom / 2;
             else if (dist_To_player >= 25)
                 zombie->x += movementSpeed * (float)dist_To_player / abs(dist_To_player);
-        } else {
+        } else if (!followPlayer){
+            zombie->attackPlayer = false;
+        }
+        else{
             zombie->attackPlayer = false;
             zombie->idle = true;
         }
