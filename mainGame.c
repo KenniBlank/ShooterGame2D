@@ -120,6 +120,8 @@ SDL_Texture* PlayerShootTexture;
 SDL_Texture* PlayerJumpTexture;
 SDL_Texture* PlayerDeadTexture;
 
+SDL_Texture* BulletTexture;
+
 SDL_Texture* ZombieRunTexture;
 SDL_Texture* ZombieAtkTexture;
 SDL_Texture* ZombieIdleTexture;
@@ -144,11 +146,13 @@ int SetUp(void){
     ZombieIdleTexture = IMG_LoadTexture(Renderer, "sprite/NPC/Zombie/Idle.png");
     ZombieDeadTexture = IMG_LoadTexture(Renderer, "sprite/NPC/Zombie/Dead.png");
 
+    BulletTexture = IMG_LoadTexture(Renderer, "sprite/bullet.png");
+
     if (!BackgroundTexture || !PlayerIdleTexture ||
         !PlayerRunTexture || !PlayerShootTexture ||
         !PlayerJumpTexture || !PlayerDeadTexture ||
         !ZombieRunTexture || !ZombieIdleTexture ||
-        !ZombieAtkTexture || !ZombieDeadTexture
+        !ZombieAtkTexture || !ZombieDeadTexture || !BulletTexture
     ) {
         fprintf(stderr, "Error loading texture: %s\n", IMG_GetError());
         game_is_running = false;
@@ -495,17 +499,31 @@ void bulletCollisionSystem(void){
 
 void bulletRender(void){
     for (int i = 0; i < bulletCount; i++){
-        if (bullets[i].direction)
+        SDL_RendererFlip flip = SDL_FLIP_NONE;
+        if (bullets[i].direction){
             bullets[i].x += delta_time * bulletVelocity;
+            flip = SDL_FLIP_HORIZONTAL;
+        }
         else
             bullets[i].x -= delta_time * bulletVelocity;
 
+        SDL_Rect src_rect ={
+            0,
+            0,
+            100,
+            100
+        };
+
         SDL_Rect dstRect = {
             bullets[i].x,
-            bullets[i].y,
+            bullets[i].y - 4,
             10, 10
         };
-        SDL_RenderDrawRect(Renderer,&dstRect);
+        if (debug){
+            SDL_SetRenderDrawColor(Renderer, 255, 0, 0, 255);
+            SDL_RenderDrawRect(Renderer,&dstRect);
+        }
+        SDL_RenderCopyEx(Renderer, PlayerIdleTexture, &src_rect, &dstRect, 0, NULL, flip);
     }
     bulletCollisionSystem(); // Called properly
 };
@@ -542,13 +560,12 @@ void zombieRender(void) {
 
         // Render zombie health bar
         if (!healthBar(zombies[z].x, zombies[z].y, zombies[z].health, false)) {
-            size++;
-            arr = realloc(arr, size * sizeof(unsigned short int));
+            arr = realloc(arr, size * sizeof(int));
             if (arr == NULL) {
                 printf("Memory Allocation failed!");
                 game_is_running = false;
             }
-            arr[size - 1] = i;
+            arr[size++] = z;
             continue;
         }
 
@@ -626,9 +643,10 @@ void zombieRender(void) {
             SDL_RenderCopyEx(Renderer, ZombieRunTexture, &srcRect, &dstRect, 0, 0, flip);
         }
     };
-    if (size > 0)
+    if (size > 0){
         removeZombie(arr, size);
-    free(arr);
+        free(arr);
+    }
 }
 
 bool healthBar(int x, int y, float health, bool Player) {
@@ -682,6 +700,8 @@ void DestroyWindow(void){
     SDL_DestroyTexture(ZombieAtkTexture);
     SDL_DestroyTexture(ZombieIdleTexture);
     SDL_DestroyTexture(ZombieDeadTexture);
+
+    SDL_DestroyTexture(BulletTexture);
 
     SDL_DestroyRenderer(Renderer);
     SDL_DestroyWindow(Window);
