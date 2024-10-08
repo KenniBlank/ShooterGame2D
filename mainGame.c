@@ -38,7 +38,6 @@ bool playerOnGround = false;
 float lastTimeOfPlayerOnGround = 0;
 bool followPlayer = false;
 
-int zombieCount = 0; // MAX_ZOMBIES/2 is max zombie that should be rendered one time at the screen, WHY? I dont know, try to fix this bug if you can. Open Challenge
 float zombie_Y;
 typedef struct {
     int x, y;           // Position
@@ -47,10 +46,10 @@ typedef struct {
     int direction;        // Direction (1 for right, -1 for left)
     bool attackPlayer;     // If zombie is attacking the player
     bool idle;             // If zombie is idle
-    float last_frame_time;
-    bool used;
+    double last_frame_time;
 } Zombie;
-Zombie zombies[MAX_ZOMBIES];
+int zombieCount = 0;
+Zombie *zombies = NULL;
 
 typedef struct{
     float x, y;
@@ -175,47 +174,41 @@ int SetUp(void){
     player_Y = WINDOW_HEIGHT - ground_height - SPRITE_HEIGHT;
     zombie_Y = WINDOW_HEIGHT - ground_height - SPRITE_HEIGHT;
 
-    if (zombieCount > (MAX_ZOMBIES / 2)) {
-        zombieCount = MAX_ZOMBIES/2;
-    }
     spawnZombies(1);
     return true;
 }
 
-void spawnZombies(int numberOfZombies){
-    float factor = 0;
-    int count = 0;
-    if (zombieCount > MAX_ZOMBIES / 2)
-        return;
-    for (int i = 0; i < MAX_ZOMBIES; i++) {
-        if (zombies[i].used == true)
-            continue;
+void spawnZombies(int numberOfZombies) {
+    float factor;
+    // Reallocate memory for the new zombies
+    if (zombies == NULL) {
+        zombies = malloc(sizeof(Zombie) * numberOfZombies);
+    } else {
+        zombies = realloc(zombies, sizeof(Zombie) * (numberOfZombies + zombieCount));
+    }
 
-        if (count >= numberOfZombies)
-            return;
+    // Spawn each zombie
+    for (int i = 0; i < numberOfZombies; i++) {
+        factor = (rand() % 2 == 1) ? -1 : 1;
+        float value = player_X + factor * (rand() % 100 + (float)WINDOW_WIDTH / 5);
 
-        if (rand() % 2 == 1)
-            factor = -1;
-        else
-            factor = 1;
-        float value = player_X + factor * (rand() % (100) + (float)WINDOW_WIDTH / 5);
-
+        // Clamp the value to be within valid screen bounds
         if (value < -((float)WINDOW_WIDTH / 5))
             value = -100;
-        else if(value > WINDOW_WIDTH + ((float)WINDOW_WIDTH / 5))
+        else if (value > WINDOW_WIDTH + ((float)WINDOW_WIDTH / 5))
             value = WINDOW_WIDTH + 100;
 
-        zombies[i].x = value;
-        zombies[i].y = WINDOW_HEIGHT - ground_height - SPRITE_HEIGHT;
-        zombies[i].health = 100.0f;
-        zombies[i].current_frame = 0;
-        zombies[i].direction = -1;  // Initially facing left
-        zombies[i].attackPlayer = false;
-        zombies[i].idle = true;
-        zombies[i].last_frame_time = SDL_GetTicks();
-        zombies[i].used = true;
+        // Initialize the zombie properties
+        zombies[zombieCount].x = value;
+        zombies[zombieCount].y = WINDOW_HEIGHT - ground_height - SPRITE_HEIGHT;
+        zombies[zombieCount].health = 100.0f;
+        zombies[zombieCount].current_frame = 0;
+        zombies[zombieCount].direction = -1;  // Initially facing left
+        zombies[zombieCount].attackPlayer = false;
+        zombies[zombieCount].idle = true;
+        zombies[zombieCount].last_frame_time = SDL_GetTicks();
+
         zombieCount++;
-        count++;
     }
 }
 
@@ -283,7 +276,7 @@ void ProcessInput(void){
 float jumpVelocity = -400.0f;
 float velocityY = 0.0f;
 float gravity = 980.0f; // 9.8m/s is earth's gravity i think
-float zombie_frame_time = 0;
+float_t zombie_frame_time = 0;
 
 void Update(void) {
     // IMP: DELAY LOGIC, 60 fps for now.
@@ -291,7 +284,7 @@ void Update(void) {
     if (time_to_wait > 0 && time_to_wait <= FRAME_TARGET_TIME)
         SDL_Delay(time_to_wait);
 
-    if (SDL_GetTicks() - zombie_frame_time > (1000)){ //spawn one zombie every 4 - 10 sec
+    if (SDL_GetTicks() - zombie_frame_time > (5000 + rand() % 10000)){ //spawn one zombie every 10 sec
         spawnZombies(1);
         zombie_frame_time = SDL_GetTicks();
     }
@@ -346,10 +339,10 @@ void Render(void){
 
     // Draw ground
     SDL_Rect ground_rect = {
-        (int)0, //x-position
-        (int)WINDOW_HEIGHT - ground_height, //y-position
-        (int)WINDOW_WIDTH, //width
-        (int)ground_height //height
+        0, //x-position
+        WINDOW_HEIGHT - ground_height, //y-position
+        WINDOW_WIDTH, //width
+        ground_height //height
     };
     SDL_SetRenderDrawColor(Renderer, 49, 91, 43, 255);
     SDL_RenderFillRect(Renderer, &ground_rect);
@@ -443,8 +436,15 @@ void playerRender(void) {
         dst_rect.y -= ActualSpriteHeight;
     }
 
-    if (shoot && (SDL_GetTicks() - shooting_last_frame) > 100){
-        flip == SDL_FLIP_NONE? bulletData(player_X, player_Y, true): bulletData(player_X, player_Y, false);
+    if (shoot && (SDL_GetTicks() - shooting_last_frame) > 200){
+        if (flip == SDL_FLIP_NONE){
+            bulletData(player_X, player_Y, true);
+            player_X -= delta_time * (rand() % 10 + 20);
+        }
+        else{
+            bulletData(player_X, player_Y, false);
+            player_X += delta_time * (rand() % 10 + 20);
+        }
         shooting_last_frame = SDL_GetTicks();
     }
 
@@ -498,43 +498,23 @@ void bulletRemove(int *array, int size){
 }
 
 void bulletCollisionSystem(void){
-    bool checkForBulletToRight = true;
-    bool checkForBulletToLeft = true;
     int totalremove = 0;
     int *removeIndex = malloc(bulletCount * sizeof(int));
-    bool anyCollision = false;
 
     for (int i = 0; i < bulletCount; i++){
-        anyCollision = false;
-
         // Check if the bullet is out of bounds
         if (bullets[i].x < 0 || bullets[i].x > WINDOW_WIDTH){
             removeIndex[totalremove++] = i;
             continue;
         }
 
-        if (bullets[i].direction) {
-            if (!checkForBulletToRight) continue;
-        } else { // Bullet to left
-            if (!checkForBulletToLeft) continue;
-        }
-
         // Check collision with zombies
         for (int j = 0; j < zombieCount; j++){
-            if (collisionDetection((int)zombies[j].x, (int)zombies[j].y, 50, (int)ActualSpriteHeight, (int)bullets[i].x, (int)bullets[i].y - 75, 10, 10)){
+            if (collisionDetection((int)zombies[j].x, (int)zombies[j].y, 50, (int)ActualSpriteHeight, (int)bullets[i].x, (int)bullets[i].y - 60, 10, 10)){
                 removeIndex[totalremove++] = i;
-                anyCollision = true;
                 zombies[j].health -= DAMAGE_BY_BULLET;
                 break;
             }
-        }
-
-        // Stop further checks in this direction if no collisions found
-        if (!anyCollision){
-            if (bullets[i].direction)
-                checkForBulletToRight = false;
-            else
-                checkForBulletToLeft = false;
         }
     }
 
@@ -544,6 +524,7 @@ void bulletCollisionSystem(void){
 
 
 void bulletRender(void){
+    bulletCollisionSystem(); // Called properly
     for (int i = 0; i < bulletCount; i++){
         SDL_RendererFlip flip = SDL_FLIP_NONE;
         if (bullets[i].direction){
@@ -553,31 +534,18 @@ void bulletRender(void){
         else
             bullets[i].x -= delta_time * bulletVelocity;
 
-        SDL_Rect src_rect ={
-            0,
-            0,
-            100,
-            100
-        };
-
-        SDL_Rect dstRect = {
-            bullets[i].x,
-            bullets[i].y - 4,
-            10, 10
-        };
+        SDL_Rect src_rect ={0, 0, 100, 100};
+        SDL_Rect dstRect = {bullets[i].x, bullets[i].y - 4, 10, 10};
         if (debug){
             SDL_SetRenderDrawColor(Renderer, 255, 0, 0, 255);
             SDL_RenderDrawRect(Renderer,&dstRect);
         }
         SDL_RenderCopyEx(Renderer, PlayerIdleTexture, &src_rect, &dstRect, 0, NULL, flip);
     }
-    bulletCollisionSystem(); // Called properly
 };
 
 void gameOver(void){
     SDL_SetRenderDrawColor(Renderer, 0, 0, 0, 0);
-
-    // SDL_Delay(10 * 1000);
     game_is_running = false;
 }
 
@@ -609,6 +577,7 @@ void zombieRender(void) {
 
     for (int z = 0; z < zombieCount; z++){
         srcRect.w = 50;
+        srcRect.h = SPRITE_HEIGHT;
         Zombie *zombie = &zombies[z];  // Pointer to current zombie
 
         // Render zombie health bar
@@ -635,9 +604,9 @@ void zombieRender(void) {
         }
 
         // Update animation frame for the zombie
-        if ((SDL_GetTicks() - zombie[z].last_frame_time) > (1000 / (float)spriteChangeRate * (1.3 + ((float)rand() / RAND_MAX) * (1.6 - 1.3)))) {
-            zombie->current_frame = (zombie->current_frame + 1) % (spriteChangeRate - 1);
-            zombie[z].last_frame_time = SDL_GetTicks();
+        if ((SDL_GetTicks() - zombie->last_frame_time) > (1000 / (float)spriteChangeRate * 1.3)){
+            zombie->current_frame = (zombie->current_frame + 1) % (spriteChangeRate-1);
+            zombie->last_frame_time = SDL_GetTicks();
         }
 
         // Movement logic based on player's position
@@ -700,10 +669,9 @@ void zombieRender(void) {
             SDL_RenderCopyEx(Renderer, ZombieRunTexture, &srcRect, &dstRect, 0, 0, flip);
         }
     };
-    if (size > 0){
+    if (size > 0)
         removeZombie(arr, size);
-        free(arr);
-    }
+    free(arr);
 }
 
 bool healthBar(int x, int y, float health, bool Player) {
@@ -744,7 +712,7 @@ int collisionDetection(int x1, int y1, int width1, int height1, int x2, int y2, 
 // Function to clear all the things the game has started
 void DestroyWindow(void){
     free(bullets);
-    // free(zombies);
+    free(zombies);
     SDL_DestroyTexture(BackgroundTexture);
 
     SDL_DestroyTexture(PlayerRunTexture);
