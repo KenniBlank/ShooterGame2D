@@ -147,7 +147,7 @@ TTF_Font* font;
 char text[] = "Game Over";
 SDL_Surface * textSurface;
 SDL_Texture *textTexture;
-SDL_Color textColor = {0, 0, 0, 255};
+SDL_Color textColor = {255, 0, 0, 255};
 
 int ground_height;
 SDL_Rect background_img_src_rect;
