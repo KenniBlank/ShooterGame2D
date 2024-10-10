@@ -274,15 +274,12 @@ SDL_Rect playButton_dest_rect;
 SDL_Rect exitButton_dest_rect;
 SDL_Rect cursorRect = {0, 0, 10, 10};
 void Paused() {
-    // SDL_ShowCursor(true);
-    SDL_SetRenderDrawColor(Renderer, 0, 22, 25, 255);
+    SDL_ShowCursor(true);
+    SDL_SetRenderDrawColor(Renderer, 22, 22, 22, 255);
     SDL_RenderClear(Renderer);
 
     cursorRect.x = mouseX - 5;
     cursorRect.y = mouseY - 5;
-
-    SDL_SetRenderDrawColor(Renderer, 255, 255, 255, 255);
-    SDL_RenderDrawRect(Renderer, &cursorRect);
 
     SDL_Rect textRect;
     SDL_Surface* textSurface = TTF_RenderText_Solid(font, pauseTxt, textColor);
