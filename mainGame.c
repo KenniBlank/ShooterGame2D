@@ -80,18 +80,20 @@ void Render(void);
 void DestroyWindow(void);
 
 int collisionDetection(int x1, int y1, int width1, int height1, int x2, int y2, int width2, int height2);
-
+bool gamePause = false;
 int main(){
     game_is_running = InitializeWindow();
     SetUp();
     // Game Loop
     while (game_is_running) {
         ProcessInput();
+        if (gamePause)
+            continue;
         Update();
         Render();
     }
     DestroyWindow();
-    return true;
+    return 0; // 0 is success
 }
 
 
@@ -268,7 +270,7 @@ void ProcessInput(void){
         case SDL_KEYDOWN:
             switch (event.key.keysym.sym) {
                 case SDLK_ESCAPE:
-                    game_is_running = false;
+                    gamePause = !gamePause;
                     break;
                 case SDLK_a:
                 case SDLK_LEFT:
@@ -280,9 +282,10 @@ void ProcessInput(void){
                     break;
                 case SDLK_w:
                 case SDLK_UP:
+                case SDLK_SPACE:
                     jump = true;
                     break;
-                case SDLK_j:
+                case SDLK_f:
                     shoot = true;
                     break;
                 case SDLK_k:
@@ -300,10 +303,11 @@ void ProcessInput(void){
                     break;
                 case SDLK_w:
                 case SDLK_UP:
+                case SDLK_SPACE:
                     jump = false;
                     canJump = false;
                     break;
-                case SDLK_j:
+                case SDLK_f:
                     shoot = false;
                     break;
             }
@@ -352,7 +356,7 @@ void Update(void) {
     int parallaxValue = delta_time * PLAYER_SPEED;
     if (player_X > (float)WINDOW_WIDTH * (rightCam/5)){
         background_img_src_rect.x += 100 * delta_time;
-        if (background_img_src_rect.x > background_img_src_rect.w)
+        if (background_img_src_rect.x >= background_img_src_rect.w)
             background_img_src_rect.x = 0;
         player_X = (rightCam/5) * (float)WINDOW_WIDTH;
         for (int i = 0; i < zombieCount; i++)
@@ -362,7 +366,7 @@ void Update(void) {
     }
     else if (player_X < (float)WINDOW_WIDTH * (leftCam/5)){
         background_img_src_rect.x -= 50 * delta_time;
-        if (background_img_src_rect.x < 0)
+        if (background_img_src_rect.x <= 0)
             background_img_src_rect.x = background_img_src_rect.w;
         player_X = (leftCam/5) * (float)WINDOW_WIDTH;
         for (int i = 0; i < zombieCount; i++)
@@ -388,6 +392,12 @@ void Update(void) {
 }
 
 void spawnMainBoss(void){
+    if (zombieKilled % 15 == 0 && zombieKilled != 0){
+        printf("Spawning The BOSS...\n");
+    }
+}
+
+void otherRender(void){
 
 }
 
@@ -421,6 +431,10 @@ void Render(void){
     zombieRender();
     playerRender();
         bulletRender();
+    spawnMainBoss();
+
+    // Render Other:
+    otherRender();
 
     SDL_RenderPresent(Renderer); // Show rendered frame to user.
 }
@@ -592,16 +606,18 @@ void bulletCollisionSystem(void){
 
 void bulletRender(void){
     bulletCollisionSystem(); // Called properly
+    SDL_Rect src_rect ={0, 0, 900, 450};
+    SDL_RendererFlip flip = SDL_FLIP_NONE;
+    SDL_Rect dstRect = {0, 0, 10, 5};
     for (int i = 0; i < bulletCount; i++){
-        SDL_RendererFlip flip = SDL_FLIP_NONE;
         if (bullets[i].direction)
             bullets[i].x += delta_time * bulletVelocity;
         else{
             bullets[i].x -= delta_time * bulletVelocity;
             flip = SDL_FLIP_HORIZONTAL;
         }
-        SDL_Rect src_rect ={0, 0, 900, 450};
-        SDL_Rect dstRect = {bullets[i].x, bullets[i].y + 3, 10, 5};
+        dstRect.x = bullets[i].x;
+        dstRect.y = bullets[i].y + 3;
         if (debug){
             SDL_SetRenderDrawColor(Renderer, 255, 0, 0, 255);
             SDL_RenderDrawRect(Renderer,&dstRect);
