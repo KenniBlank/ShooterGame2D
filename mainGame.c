@@ -1,4 +1,5 @@
 #include <SDL2/SDL_error.h>
+#include <SDL2/SDL_keyboard.h>
 #include <SDL2/SDL_pixels.h>
 #include <SDL2/SDL_rect.h>
 #include <SDL2/SDL_render.h>
@@ -42,6 +43,8 @@ bool playerOnGround = false;
 float lastTimeOfPlayerOnGround = 0;
 bool followPlayer = false;
 
+int mouseX, mouseY;
+
 float zombie_Y;
 typedef struct {
     int x, y;           // Position
@@ -61,7 +64,7 @@ typedef struct{
     bool direction;// True is right and false left
 } Bullet;
 Bullet *bullets = NULL;
-const unsigned short int bulletVelocity = 500;
+const unsigned short int bulletVelocity = 600;
 unsigned short int bulletCount = 0;
 
 
@@ -81,14 +84,18 @@ void DestroyWindow(void);
 
 int collisionDetection(int x1, int y1, int width1, int height1, int x2, int y2, int width2, int height2);
 bool gamePause = false;
+float pause_start_time_tick = 0;
+void Paused(void);
 int main(){
     game_is_running = InitializeWindow();
     SetUp();
     // Game Loop
     while (game_is_running) {
         ProcessInput();
-        if (gamePause)
+        if (gamePause){
+            Paused();
             continue;
+        }
         Update();
         Render();
     }
@@ -124,6 +131,7 @@ int InitializeWindow(void){
         fprintf(stderr,"Error: %s",SDL_GetError());
         return false;
     }
+    SDL_ShowCursor(SDL_DISABLE); // Disable Mouse
     if (IMG_Init(IMG_INIT_PNG) == 0) {
         fprintf(stderr, "Error: %s", IMG_GetError());
         return false;
@@ -147,8 +155,12 @@ SDL_Texture* ZombieAtkTexture;
 SDL_Texture* ZombieIdleTexture;
 SDL_Texture* ZombieDeadTexture;
 
+SDL_Texture* ResumeButtonTexture;
+SDL_Texture* ExitGameButtonTexture;
+
 TTF_Font* font;
-char text[] = "Game Over";
+char text[] = "GAME OVER";
+char pauseTxt[] = "Game Paused";
 SDL_Surface * textSurface;
 SDL_Texture *textTexture;
 SDL_Color textColor = {255, 0, 0, 255};
@@ -174,11 +186,15 @@ int SetUp(void){
 
     BulletTexture = IMG_LoadTexture(Renderer, "sprite/bullet.png");
 
+    ResumeButtonTexture = IMG_LoadTexture(Renderer, "sprite/icons/playGame.png");
+    ExitGameButtonTexture = IMG_LoadTexture(Renderer, "sprite/icons/exitGame.png");
+
     if (!BackgroundTexture || !PlayerIdleTexture ||
         !PlayerRunTexture || !PlayerShootTexture ||
         !PlayerJumpTexture || !PlayerDeadTexture ||
         !ZombieRunTexture || !ZombieIdleTexture ||
-        !ZombieAtkTexture || !ZombieDeadTexture || !BulletTexture
+        !ZombieAtkTexture || !ZombieDeadTexture ||
+        !BulletTexture || !ResumeButtonTexture || !ExitGameButtonTexture
     ) {
         printf("Error loading texture: %s\n", IMG_GetError());
         game_is_running = false;
@@ -223,12 +239,10 @@ int SetUp(void){
 
 void spawnZombies(int numberOfZombies) {
     float factor;
-    // Reallocate memory for the new zombies
-    if (zombies == NULL) {
+    if (zombies == NULL)
         zombies = malloc(sizeof(Zombie) * numberOfZombies);
-    } else {
+    else
         zombies = realloc(zombies, sizeof(Zombie) * (numberOfZombies + zombieCount));
-    }
 
     // Spawn each zombie
     for (int i = 0; i < numberOfZombies; i++) {
@@ -255,6 +269,62 @@ void spawnZombies(int numberOfZombies) {
     }
 }
 
+
+SDL_Rect playButton_dest_rect;
+SDL_Rect exitButton_dest_rect;
+SDL_Rect cursorRect = {0, 0, 10, 10};
+void Paused() {
+    // SDL_ShowCursor(true);
+    SDL_SetRenderDrawColor(Renderer, 0, 22, 25, 255);
+    SDL_RenderClear(Renderer);
+
+    cursorRect.x = mouseX - 5;
+    cursorRect.y = mouseY - 5;
+
+    SDL_SetRenderDrawColor(Renderer, 255, 255, 255, 255);
+    SDL_RenderDrawRect(Renderer, &cursorRect);
+
+    SDL_Rect textRect;
+    SDL_Surface* textSurface = TTF_RenderText_Solid(font, pauseTxt, textColor);
+    if (textSurface == NULL) {
+        printf("Error: %s", SDL_GetError());
+        return;
+    }
+    textTexture = SDL_CreateTextureFromSurface(Renderer, textSurface);
+    SDL_QueryTexture(textTexture, NULL, NULL, &textRect.w, &textRect.h);
+
+    textRect.x = (WINDOW_WIDTH - textRect.w) / 2;
+    textRect.y = (WINDOW_HEIGHT - textRect.h) / 2 - WINDOW_HEIGHT / 5;
+
+    SDL_RenderCopy(Renderer, textTexture, NULL, &textRect);
+
+    // Play button positioning
+    SDL_Rect playButton_src_rect = {0, 0, 160, 160};
+    playButton_dest_rect.w = 40;
+    playButton_dest_rect.h = 40;
+    playButton_dest_rect.x = (WINDOW_WIDTH - 2 * playButton_dest_rect.w - 50) / 2; // Center and add padding
+    playButton_dest_rect.y = textRect.y + 60;
+
+    SDL_RenderCopy(Renderer, ResumeButtonTexture, &playButton_src_rect, &playButton_dest_rect);
+
+    // Exit button positioning
+    exitButton_dest_rect.w = 40;
+    exitButton_dest_rect.h = 40;
+    exitButton_dest_rect.x = playButton_dest_rect.x + playButton_dest_rect.w + 50; // Offset by button width + padding
+    exitButton_dest_rect.y = playButton_dest_rect.y;
+
+    SDL_RenderCopy(Renderer, ExitGameButtonTexture, &playButton_src_rect, &exitButton_dest_rect);
+
+    SDL_SetRenderDrawColor(Renderer, 255, 255, 255, 255);
+    if(collisionDetection(cursorRect.x, cursorRect.y, cursorRect.w, cursorRect.h, playButton_dest_rect.x, playButton_dest_rect.y, playButton_dest_rect.w, playButton_dest_rect.h))
+        SDL_RenderDrawRect(Renderer, &playButton_dest_rect);
+    if(collisionDetection(cursorRect.x, cursorRect.y, cursorRect.w, cursorRect.h, exitButton_dest_rect.x, exitButton_dest_rect.y, exitButton_dest_rect.w, exitButton_dest_rect.h))
+        SDL_RenderDrawRect(Renderer, &exitButton_dest_rect);
+
+    SDL_RenderPresent(Renderer);
+    SDL_FreeSurface(textSurface);
+}
+
 // Function to process keyboard input
 short int moveLR = 0;
 bool jump = false;
@@ -262,65 +332,87 @@ bool shoot = false;
 bool debug = false;
 void ProcessInput(void){
     SDL_Event event;
-    SDL_PollEvent(&event);
-    switch (event.type) {
-        case SDL_QUIT:
-            game_is_running = false;
-            break;
-        case SDL_KEYDOWN:
-            switch (event.key.keysym.sym) {
-                case SDLK_ESCAPE:
-                    gamePause = !gamePause;
+    while(SDL_PollEvent(&event)){
+        switch (event.type) {
+            case SDL_MOUSEMOTION:
+                if (!gamePause)
                     break;
-                case SDLK_a:
-                case SDLK_LEFT:
-                    moveLR = -1;
+                SDL_GetMouseState(&mouseX, &mouseY);
+                break;
+            case SDL_MOUSEBUTTONDOWN:
+                if(!gamePause)
                     break;
-                case SDLK_d:
-                case SDLK_RIGHT:
-                    moveLR = 1;
-                    break;
-                case SDLK_w:
-                case SDLK_UP:
-                case SDLK_SPACE:
-                    jump = true;
-                    break;
-                case SDLK_f:
-                    shoot = true;
-                    break;
-                case SDLK_k:
-                    debug = !debug;
-                    break;
-            }
-            break;
-        case SDL_KEYUP:
-            switch (event.key.keysym.sym) {
-                case SDLK_a:
-                case SDLK_LEFT:
-                case SDLK_d:
-                case SDLK_RIGHT:
-                    moveLR = 0;
-                    break;
-                case SDLK_w:
-                case SDLK_UP:
-                case SDLK_SPACE:
-                    jump = false;
-                    canJump = false;
-                    break;
-                case SDLK_f:
-                    shoot = false;
-                    break;
-            }
-            break;
-        default:
-            break;
+                if (event.button.button == SDL_BUTTON_LEFT){
+                    if(collisionDetection(cursorRect.x, cursorRect.y, cursorRect.w, cursorRect.h, playButton_dest_rect.x, playButton_dest_rect.y, playButton_dest_rect.w, playButton_dest_rect.h))
+                        gamePause = false;
+                    if(collisionDetection(cursorRect.x, cursorRect.y, cursorRect.w, cursorRect.h, exitButton_dest_rect.x, exitButton_dest_rect.y, exitButton_dest_rect.w, exitButton_dest_rect.h))
+                        game_is_running = false;
+                }
+                break;
+            case SDL_QUIT:
+                game_is_running = false;
+                break;
+            case SDL_KEYDOWN:
+                switch (event.key.keysym.sym) {
+                    case SDLK_ESCAPE:
+                        gamePause = !gamePause;
+                        if (gamePause)
+                            pause_start_time_tick = SDL_GetTicks();
+                        else{
+                            last_frame_time += SDL_GetTicks() - pause_start_time_tick;
+                            SDL_ShowCursor(SDL_DISABLE);
+                        }
+                        break;
+                    case SDLK_a:
+                    case SDLK_LEFT:
+                        moveLR = -1;
+                        break;
+                    case SDLK_d:
+                    case SDLK_RIGHT:
+                        moveLR = 1;
+                        break;
+                    case SDLK_w:
+                    case SDLK_UP:
+                    case SDLK_SPACE:
+                        jump = true;
+                        break;
+                    case SDLK_f:
+                        shoot = true;
+                        break;
+                    case SDLK_k:
+                        debug = !debug;
+                        break;
+                }
+                break;
+            case SDL_KEYUP:
+                switch (event.key.keysym.sym) {
+                    case SDLK_a:
+                    case SDLK_LEFT:
+                    case SDLK_d:
+                    case SDLK_RIGHT:
+                        moveLR = 0;
+                        break;
+                    case SDLK_w:
+                    case SDLK_UP:
+                    case SDLK_SPACE:
+                        jump = false;
+                        canJump = false;
+                        break;
+                    case SDLK_f:
+                        shoot = false;
+                        break;
+                }
+                break;
+            default:
+                break;
+        }
     }
 }
 
 // Function to Update Game Objects Per Frame
 float jumpVelocity = -400.0f;
 float velocityY = 0.0f;
-float gravity = 980.0f; // 9.8m/s is earth's gravity i think
+float gravity = 880.0f; // 9.8m/s is earth's gravity i think
 float_t zombie_frame_time = 0;
 float rightCam = 3.0;
 float leftCam = 2.0;
@@ -332,7 +424,7 @@ void Update(void) {
         SDL_Delay(time_to_wait);
 
     if (SDL_GetTicks() - zombie_frame_time > (10000 + rand() % 30000)){ //spawn one zombie every 10-30 sec
-        spawnZombies(rand() % 4 + 1);
+        spawnZombies(rand() % 3 + 1);
         zombie_frame_time = SDL_GetTicks();
     }
 
@@ -376,7 +468,7 @@ void Update(void) {
     }
 
     // Healing Ability
-    playerHealth += delta_time * 5;
+    playerHealth += delta_time;
     if (playerHealth > 100)
         playerHealth = 100;
 
@@ -491,7 +583,7 @@ void playerRender(void) {
         mulFactor = 1;
     }
     if (!moveLR){
-        playerSprintLevel += delta_time * 20;
+        playerSprintLevel += delta_time * 50;
         if(playerSprintLevel > 100){
             playerSprintLevel = 100;
         }
@@ -628,18 +720,15 @@ void bulletRender(void){
 
 void gameOver(void){
     // Displaying GameOverText at Center Of Screen
-
     SDL_Rect textRect;
     SDL_QueryTexture(textTexture, NULL, NULL, &textRect.w, &textRect.h);
     textRect.x = (WINDOW_WIDTH - textRect.w) / 2;
     textRect.y = (WINDOW_HEIGHT - textRect.h) / 2;
 
     SDL_RenderCopy(Renderer, textTexture, NULL, &textRect);
-
     SDL_RenderPresent(Renderer);
-    game_is_running = false;
-
     SDL_Delay(5000);
+    game_is_running = false;
 }
 
 int i = 0;
@@ -837,6 +926,9 @@ void DestroyWindow(void){
     SDL_DestroyTexture(ZombieDeadTexture);
 
     SDL_DestroyTexture(BulletTexture);
+
+    SDL_DestroyTexture(ResumeButtonTexture);
+    SDL_DestroyTexture(ExitGameButtonTexture);
 
     SDL_DestroyRenderer(Renderer);
     SDL_DestroyWindow(Window);
