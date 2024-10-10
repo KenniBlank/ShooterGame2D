@@ -31,10 +31,11 @@ float delta_time = 0.0f; // This is very important dont delete this ever.
 float player_X = 100;
 float player_Y = 0;
 int groundLevel = 0;
-const int PLAYER_SPEED = 150;
+int PLAYER_SPEED = 150;
 int spriteInSpriteSheet = 0;
 bool canJump = true;
-float_t playerHealth = 100.0;
+float playerHealth = 100.0;
+float playerSprintLevel = 100.0;
 bool playerDead = false;
 
 bool playerOnGround = false;
@@ -52,6 +53,7 @@ typedef struct {
     double last_frame_time;
 } Zombie;
 int zombieCount = 0;
+int zombieKilled = 0;
 Zombie *zombies = NULL;
 
 typedef struct{
@@ -59,7 +61,7 @@ typedef struct{
     bool direction;// True is right and false left
 } Bullet;
 Bullet *bullets = NULL;
-const unsigned short int bulletVelocity = 300;
+const unsigned short int bulletVelocity = 500;
 unsigned short int bulletCount = 0;
 
 
@@ -316,6 +318,8 @@ float jumpVelocity = -400.0f;
 float velocityY = 0.0f;
 float gravity = 980.0f; // 9.8m/s is earth's gravity i think
 float_t zombie_frame_time = 0;
+float rightCam = 3.0;
+float leftCam = 2.0;
 
 void Update(void) {
     // IMP: DELAY LOGIC, 60 fps for now.
@@ -346,30 +350,25 @@ void Update(void) {
         gameOver();
 
     int parallaxValue = delta_time * PLAYER_SPEED;
-    if (player_X > (float)WINDOW_WIDTH * (6.0/7)){
-        background_img_src_rect.x += 1;
+    if (player_X > (float)WINDOW_WIDTH * (rightCam/5)){
+        background_img_src_rect.x += 100 * delta_time;
         if (background_img_src_rect.x > background_img_src_rect.w)
             background_img_src_rect.x = 0;
-        player_X = (6.0/7) * (float)WINDOW_WIDTH - 1;
-        for (int i = 0; i < zombieCount; i++){
+        player_X = (rightCam/5) * (float)WINDOW_WIDTH;
+        for (int i = 0; i < zombieCount; i++)
             zombies[i].x -= parallaxValue;
-        }
-        for (int i = 0; i < bulletCount; i++){
+        for (int i = 0; i < bulletCount; i++)
             bullets[i].x -= parallaxValue;
-        }
-
     }
-    else if (player_X < (float)WINDOW_WIDTH * (1.0/7)){
-        background_img_src_rect.x -= 1;
+    else if (player_X < (float)WINDOW_WIDTH * (leftCam/5)){
+        background_img_src_rect.x -= 50 * delta_time;
         if (background_img_src_rect.x < 0)
             background_img_src_rect.x = background_img_src_rect.w;
-        player_X = (1.0/7) * (float)WINDOW_WIDTH + 1;
-        for (int i = 0; i < zombieCount; i++){
+        player_X = (leftCam/5) * (float)WINDOW_WIDTH;
+        for (int i = 0; i < zombieCount; i++)
             zombies[i].x += parallaxValue;
-        }
-        for (int i = 0; i < bulletCount; i++){
+        for (int i = 0; i < bulletCount; i++)
             bullets[i].x += parallaxValue;
-        }
     }
 
     // Healing Ability
@@ -388,6 +387,9 @@ void Update(void) {
     }
 }
 
+void spawnMainBoss(void){
+
+}
 
 int last_frame_time_for_idle = 0;
 int addFactor = 43;
@@ -397,7 +399,7 @@ float mulFactor = 1;
 // Function to render game objects in the scene
 void Render(void){
     // Background Color
-    SDL_SetRenderDrawColor(Renderer, 150, 180, 230, 255);
+    SDL_SetRenderDrawColor(Renderer, 211, 211, 211, 1);
     SDL_RenderClear(Renderer);
 
     SDL_RenderCopy(Renderer, BackgroundTexture, &background_img_src_rect, &background_img_dest_rect); //Background Image
@@ -460,6 +462,9 @@ void playerRender(void) {
         n = -8;
         mulFactor = 1.5;
         player_X += moveLR * delta_time * PLAYER_SPEED;
+        playerSprintLevel -= delta_time * 10;
+        if (playerSprintLevel < 0.0f)
+            playerSprintLevel = 0.0f;
     }
     else if (shoot) {
         spriteInSpriteSheet = 4;  // frames in shooting animation
@@ -470,6 +475,12 @@ void playerRender(void) {
         spriteInSpriteSheet = 8;  // Idle animation frames
         n = -8;
         mulFactor = 1;
+    }
+    if (!moveLR){
+        playerSprintLevel += delta_time * 20;
+        if(playerSprintLevel > 100){
+            playerSprintLevel = 100;
+        }
     }
 
     SDL_Rect src_rect = {
@@ -502,8 +513,12 @@ void playerRender(void) {
     }
 
     // Only allow the jump animation while in the air
-    if (!canJump)
+    if (!canJump){
+        playerSprintLevel -= delta_time * 30;
+        if (playerSprintLevel < 0)
+            playerSprintLevel = 0;
         SDL_RenderCopyEx(Renderer, PlayerJumpTexture, &src_rect, &dst_rect, 0, NULL, flip);
+    }
     else if (moveLR && !shoot)
         SDL_RenderCopyEx(Renderer, PlayerRunTexture, &src_rect, &dst_rect, 0, NULL, flip);
     else if (shoot)
@@ -579,20 +594,19 @@ void bulletRender(void){
     bulletCollisionSystem(); // Called properly
     for (int i = 0; i < bulletCount; i++){
         SDL_RendererFlip flip = SDL_FLIP_NONE;
-        if (bullets[i].direction){
+        if (bullets[i].direction)
             bullets[i].x += delta_time * bulletVelocity;
+        else{
+            bullets[i].x -= delta_time * bulletVelocity;
             flip = SDL_FLIP_HORIZONTAL;
         }
-        else
-            bullets[i].x -= delta_time * bulletVelocity;
-
-        SDL_Rect src_rect ={0, 0, 100, 100};
-        SDL_Rect dstRect = {bullets[i].x, bullets[i].y - 4, 10, 10};
+        SDL_Rect src_rect ={0, 0, 900, 450};
+        SDL_Rect dstRect = {bullets[i].x, bullets[i].y + 3, 10, 5};
         if (debug){
             SDL_SetRenderDrawColor(Renderer, 255, 0, 0, 255);
             SDL_RenderDrawRect(Renderer,&dstRect);
         }
-        SDL_RenderCopyEx(Renderer, PlayerIdleTexture, &src_rect, &dstRect, 0, NULL, flip);
+        SDL_RenderCopyEx(Renderer, BulletTexture, &src_rect, &dstRect, 0, NULL, flip);
     }
 };
 
@@ -628,6 +642,7 @@ void removeZombie(int *arr, int size) {
             zombies[j] = zombies[j + 1];  // Shift the other array element one step left: Clever RIGHT!!!
     }
     zombieCount-=size;
+    zombieKilled+=size;
 }
 
 void zombieRender(void) {
@@ -741,6 +756,23 @@ bool healthBar(int x, int y, float health, bool Player) {
     if (health <= 0) {
         return false;
     }
+
+    // Draw Sprint Bar
+    if (Player){
+        SDL_SetRenderDrawColor(Renderer, 0, 0, 10, 255);
+        SDL_Rect sprintbar = {x + 5, y + 45 - 4, 40, 5};
+
+        SDL_SetRenderDrawColor(Renderer, 0, 0, 0, 255);
+        SDL_RenderDrawRect(Renderer, &sprintbar);
+
+        sprintbar.w = (playerSprintLevel / 100 * 40);
+        if (sprintbar.w > 40)
+            sprintbar.w = 40;
+        SDL_SetRenderDrawColor(Renderer, 50, 50, 255, 255);
+        SDL_RenderFillRect(Renderer, &sprintbar);
+        SDL_SetRenderDrawColor(Renderer, 0, 0, 0, 255);
+        SDL_RenderDrawRect(Renderer, &sprintbar);
+    }
     // Draw the background of the health bar
     SDL_SetRenderDrawColor(Renderer, 200, 200, 200, 255);
     SDL_Rect healthbar = {x + 5, y + 45, 40, 10};
@@ -761,7 +793,6 @@ bool healthBar(int x, int y, float health, bool Player) {
 
     // Set color based on whether it's a player or not
     Player? SDL_SetRenderDrawColor(Renderer, 255 - healthInt * 2.55, healthInt * 2.55, b, 255): SDL_SetRenderDrawColor(Renderer, 255, 0, 0, 255);
-
     SDL_RenderFillRect(Renderer, &healthbar);
     SDL_SetRenderDrawColor(Renderer, 0, 0, 0, 255);
     SDL_RenderDrawRect(Renderer, &healthbar);
