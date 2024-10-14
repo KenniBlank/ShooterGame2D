@@ -45,7 +45,7 @@ bool followPlayer = false;
 
 int mouseX, mouseY;
 int bulletTotal = 200;
-float distanceTravelledByPlayerFromSpawn = 0;
+double distanceTravelledByPlayerFromSpawn = 0;
 
 float zombie_Y;
 typedef struct {
@@ -67,7 +67,7 @@ typedef struct{
     bool direction;// True is right and false left
 } Bullet;
 Bullet *bullets = NULL;
-const unsigned short int bulletVelocity = 600;
+unsigned short int bulletVelocity = 300;
 unsigned short int bulletCount = 0;
 
 
@@ -672,16 +672,18 @@ void playerRender(void) {
 
     if (shoot && (SDL_GetTicks() - shooting_last_frame) > (120)){
         if (bulletTotal > 0){
-            if (flip == SDL_FLIP_NONE){
-                bulletData(player_X, player_Y, true);
-                player_X -= delta_time * (rand() % 10 + 20);
+            if (src_rect.x != 45 + addFactor * 2.98 * current_frame){
+                if (flip == SDL_FLIP_NONE){
+                    bulletData(player_X, player_Y, true);
+                    player_X -= delta_time * (rand() % 10 + 20);
+                }
+                else{
+                    bulletData(player_X, player_Y, false);
+                    player_X += delta_time * (rand() % 10 + 20);
+                }
+                shooting_last_frame = SDL_GetTicks();
+                bulletTotal--;
             }
-            else{
-                bulletData(player_X, player_Y, false);
-                player_X += delta_time * (rand() % 10 + 20);
-            }
-            shooting_last_frame = SDL_GetTicks();
-            bulletTotal--;
         }
     }
 
@@ -746,11 +748,12 @@ void bulletCollisionSystem(void){
 
         // Check collision with zombies
         for (int j = 0; j < zombieCount; j++){
-            if (collisionDetection((int)zombies[j].x, (int)zombies[j].y, 50, (int)ActualSpriteHeight, (int)bullets[i].x, (int)bullets[i].y - 60, 10, 10)){
-                removeIndex[totalremove++] = i;
-                zombies[j].health -= DAMAGE_BY_BULLET;
-                break;
-            }
+            if (!zombies[j].dead)
+                if (collisionDetection((int)zombies[j].x, (int)zombies[j].y, 50, (int)ActualSpriteHeight, (int)bullets[i].x, (int)bullets[i].y - 60, 10, 10)){
+                    removeIndex[totalremove++] = i;
+                    zombies[j].health -= DAMAGE_BY_BULLET;
+                    break;
+                }
         }
     }
 
@@ -814,35 +817,13 @@ void removeZombie(int *arr, int size) {
     }
     zombieCount-=size;
     zombieKilled+=size;
-
-    // int dead[] = {15, 110, 200, 305, 405};
-    // srcRect.x = dead[temp];
-    // srcRect.w = 80;
-    // SDL_Rect dst_Rect = {
-    //     100,
-    //     WINDOW_HEIGHT - ground_height - SPRITE_HEIGHT,
-    //     srcRect.w, SPRITE_HEIGHT
-    // };
-    // if (SDL_GetTicks() - tempTime > 300){
-    //     temp = (temp + 1) % 4;
-    //     tempTime = SDL_GetTicks();
-    // }
-    // SDL_RenderCopy(Renderer, ZombieDeadTexture, &srcRect, &dst_Rect);
-    // if (debug){
-    //     dst_Rect.w = 80;
-    //     SDL_SetRenderDrawColor(Renderer, 255, 0, 0, 255);
-    //     dst_Rect.h -= ActualSpriteHeight;
-    //     dst_Rect.y += ActualSpriteHeight;
-    //     SDL_RenderDrawRect(Renderer, &dst_Rect);
-    //     dst_Rect.h += ActualSpriteHeight;
-    //     dst_Rect.y -= ActualSpriteHeight;
-    // }
 }
 
 void zombieRender(void) {
     int run[] = {25, 115, 215, 313, 415, 507, 600};
     int atk[] = {25, 117, 220, 310};
     int idle[] = {24, 115, 215, 315, 411, 504, 600, 698, 795};
+    int dead[] = {15, 110, 200, 305, 405};
 
     int *arr = NULL;
     int size = 0;
@@ -853,17 +834,29 @@ void zombieRender(void) {
         Zombie *zombie = &zombies[z];  // Pointer to current zombie
 
         // Render zombie health bar
-        if (!healthBar(zombies[z].x, zombies[z].y, zombies[z].health, false)) {
-            arr = realloc(arr, size * sizeof(int));
-            if (arr == NULL) {
-                printf("Memory Allocation failed!");
-                game_is_running = false;
+        if (!zombie->dead)
+            if (!healthBar(zombies[z].x, zombies[z].y, zombies[z].health, false)){
+                zombie->current_frame = 0;
+                zombie->dead = true;
+                zombie->idle = false;
+                zombie->attackPlayer = false;
             }
-            arr[size++] = z;
-            continue;
-        }
 
-        if (zombie->idle) {
+        if (zombie->dead){
+            spriteChangeRate = 7;
+            srcRect.w = 80;
+            srcRect.x = dead[zombie->current_frame];
+            if (zombie->current_frame == 5){
+                arr = realloc(arr, size * sizeof(int));
+                if (arr == NULL) {
+                    printf("Memory Allocation failed!");
+                    game_is_running = false;
+                }
+                arr[size++] = z;
+                continue;
+            }
+        }
+        else if (zombie->idle) {
             spriteChangeRate = 9;
             srcRect.x = idle[zombie->current_frame];
         } else if (zombie->attackPlayer) {
@@ -890,30 +883,27 @@ void zombieRender(void) {
             srcRect.w, SPRITE_HEIGHT
         };
 
-        if (abs(dist_To_player) <= 25 && (player_Y - zombie->y >= -40)) {
+        if (abs(dist_To_player) <= 25 && (player_Y - zombie->y >= -40) && !zombie->dead) {
             if (collisionDetection(player_X, player_Y, 50, ActualSpriteHeight, zombie->x, zombie->y, 50, ActualSpriteHeight)) {
                 zombie->idle = false;
                 zombie->attackPlayer = true;
-                flip = (dist_To_player < 0) ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE;
             }
-        } else if (abs(dist_To_player) > 25 && abs(dist_To_player) < (WINDOW_WIDTH - 10) && followPlayer) {
+        } else if (abs(dist_To_player) > 25 && abs(dist_To_player) < (WINDOW_WIDTH - 10) && followPlayer && !zombie->dead) {
             zombie->attackPlayer = false;
             zombie->idle = false;
             int resultOfRandom = rand() % 100 + 50;
             float movementSpeed = delta_time * resultOfRandom;
-            if (zombie->dead)
-                continue;
             if (dist_To_player < -25)
                 zombie->x -= movementSpeed * (float)(-dist_To_player) / abs(dist_To_player) - delta_time * resultOfRandom / 2;
             else if (dist_To_player >= 25)
                 zombie->x += movementSpeed * (float)dist_To_player / abs(dist_To_player);
         }
-        if (!followPlayer){
+        if (!followPlayer && !zombie->dead){
             zombie->attackPlayer = false;
             zombie->idle = true;
         }
 
-        if(zombie->attackPlayer){
+        if(zombie->attackPlayer && !zombie->dead){
             if (zombie->current_frame == 2){
                 if (collisionDetection(player_X, player_Y, 50, ActualSpriteHeight, zombie->x, zombie->y, 50, ActualSpriteHeight)){
                     playerHealth = (int)playerHealth;
@@ -932,14 +922,17 @@ void zombieRender(void) {
         }
 
         flip = (dist_To_player < 0) ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE;
+
         // ZombieSprite
-        if (zombie->idle) {
-            SDL_RenderCopy(Renderer, ZombieIdleTexture, &srcRect, &dstRect);
-        } else if (zombie->attackPlayer) {
-            SDL_RenderCopyEx(Renderer, ZombieAtkTexture, &srcRect, &dstRect, 0, 0, flip);
-        } else {
-            SDL_RenderCopyEx(Renderer, ZombieRunTexture, &srcRect, &dstRect, 0, 0, flip);
+        if (zombie->dead){
+            SDL_RenderCopyEx(Renderer, ZombieDeadTexture, &srcRect, &dstRect, 0, 0, flip);
         }
+        else if (zombie->idle)
+            SDL_RenderCopy(Renderer, ZombieIdleTexture, &srcRect, &dstRect);
+        else if (zombie->attackPlayer)
+            SDL_RenderCopyEx(Renderer, ZombieAtkTexture, &srcRect, &dstRect, 0, 0, flip);
+        else
+            SDL_RenderCopyEx(Renderer, ZombieRunTexture, &srcRect, &dstRect, 0, 0, flip);
     };
     if (size > 0)
         removeZombie(arr, size);
