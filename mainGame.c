@@ -95,6 +95,10 @@ int main(){
     // Game Loop
     while (game_is_running) {
         ProcessInput();
+        if (playerDead){
+            gameOver();
+            continue;
+        }
         if (gamePause){
             Paused();
             continue;
@@ -161,13 +165,6 @@ SDL_Texture* ZombieDeadTexture;
 SDL_Texture* ResumeButtonTexture;
 SDL_Texture* ExitGameButtonTexture;
 
-TTF_Font* font;
-char text[] = "GAME OVER";
-char pauseTxt[] = "Game Paused";
-SDL_Surface * textSurface;
-SDL_Texture *textTexture;
-SDL_Color textColor = {255, 0, 0, 255};
-
 int ground_height;
 SDL_Rect background_img_src_rect;
 SDL_Rect background_img_dest_rect;
@@ -200,24 +197,6 @@ int SetUp(void){
         !BulletTexture || !ResumeButtonTexture || !ExitGameButtonTexture
     ) {
         printf("Error loading texture: %s\n", IMG_GetError());
-        game_is_running = false;
-    }
-
-    // Text Display
-    font = TTF_OpenFont("textFont/AmaticSC-Regular.ttf", 40);
-    if (font == NULL){
-        printf("Error opening Font: %s", TTF_GetError());
-        game_is_running = false;
-    }
-    textSurface = TTF_RenderText_Solid(font, text, textColor);
-    if (textSurface == NULL) {
-        printf("Error rendering text: %s\n", TTF_GetError());
-        game_is_running = false;
-    }
-    textTexture = SDL_CreateTextureFromSurface(Renderer, textSurface);
-    if (textTexture == NULL) {
-        printf("Error creating texture: %s\n", SDL_GetError());
-        SDL_FreeSurface(textSurface);
         game_is_running = false;
     }
 
@@ -284,13 +263,17 @@ void Paused(void) {
     cursorRect.x = mouseX - 5;
     cursorRect.y = mouseY - 5;
 
-    SDL_Rect textRect;
-    SDL_Surface* textSurface = TTF_RenderText_Solid(font, pauseTxt, textColor);
+    TTF_Font* font = TTF_OpenFont("textFont/AmaticSC-Regular.ttf", 40);
+    SDL_Color textColor = {255, 0, 0, 255};
+
+    SDL_Surface* textSurface = TTF_RenderText_Solid(font, "Game Paused", textColor);
     if (textSurface == NULL) {
         printf("Error: %s", SDL_GetError());
         return;
     }
-    textTexture = SDL_CreateTextureFromSurface(Renderer, textSurface);
+
+    SDL_Rect textRect;
+    SDL_Texture* textTexture = SDL_CreateTextureFromSurface(Renderer, textSurface);
     SDL_QueryTexture(textTexture, NULL, NULL, &textRect.w, &textRect.h);
 
     textRect.x = (WINDOW_WIDTH - textRect.w) / 2;
@@ -352,6 +335,8 @@ void ProcessInput(void){
                 game_is_running = false;
                 break;
             case SDL_KEYDOWN:
+                if (playerDead)
+                    game_is_running = false;
                 switch (event.key.keysym.sym) {
                     case SDLK_ESCAPE:
                         gamePause = !gamePause;
@@ -428,6 +413,7 @@ void Update(void) {
         zombie_frame_time = SDL_GetTicks();
     }
 
+
     delta_time = (SDL_GetTicks() - last_frame_time) / 1000.0f;
     last_frame_time = SDL_GetTicks();
 
@@ -445,9 +431,6 @@ void Update(void) {
         lastTimeOfPlayerOnGround = SDL_GetTicks();
         playerJumpForce += 20 * delta_time;
     }
-
-    if (playerDead)
-        gameOver();
 
     int parallaxValue = delta_time * PLAYER_SPEED;
     if (player_X > (float)WINDOW_WIDTH * (rightCam/5)){
@@ -623,6 +606,7 @@ void playerRender(void) {
     if (playerDirection == -1)
         flip = SDL_FLIP_HORIZONTAL;
 
+    // int dead[]= {0, 130, 280, 400, 560};
 
     if (player_Y < (WINDOW_HEIGHT - ground_height - SPRITE_HEIGHT)) {
         spriteInSpriteSheet = 7;  //frames in jump animation
@@ -785,16 +769,82 @@ void bulletRender(void){
 };
 
 void gameOver(void){
-    // Displaying GameOverText at Center Of Screen
-    SDL_Rect textRect;
-    SDL_QueryTexture(textTexture, NULL, NULL, &textRect.w, &textRect.h);
-    textRect.x = (WINDOW_WIDTH - textRect.w) / 2;
-    textRect.y = (WINDOW_HEIGHT - textRect.h) / 2;
 
-    SDL_RenderCopy(Renderer, textTexture, NULL, &textRect);
+    TTF_Font* font = TTF_OpenFont("textFont/AmaticSC-Regular.ttf", 40);
+    if (font == NULL){
+        printf("Error opening Font: %s", TTF_GetError());
+        game_is_running = false;
+    }
+    char line1[] = "GameOver";
+    char line2[] = "...Enter Any Key To Exit...";
+
+    SDL_Color textColor = {255, 0, 0, 255};
+
+    SDL_Surface* textSurface1 = TTF_RenderText_Solid(font, line1, textColor);
+    if (textSurface1 == NULL) {
+        printf("Error rendering text (line 1): %s\n", TTF_GetError());
+        game_is_running = false;
+    }
+
+    textColor.g = 255;
+    textColor.b = 255;
+    SDL_Surface* textSurface2 = TTF_RenderText_Solid(font, line2, textColor);
+    if (textSurface2 == NULL) {
+        printf("Error rendering text (line 2): %s\n", TTF_GetError());
+        SDL_FreeSurface(textSurface1);
+        game_is_running = false;
+    }
+
+    SDL_Texture* textTexture1 = SDL_CreateTextureFromSurface(Renderer, textSurface1);
+    if (textTexture1 == NULL) {
+        printf("Error creating texture (line 1): %s\n", SDL_GetError());
+        SDL_FreeSurface(textSurface1);
+        SDL_FreeSurface(textSurface2);
+        game_is_running = false;
+    }
+
+    SDL_Texture* textTexture2 = SDL_CreateTextureFromSurface(Renderer, textSurface2);
+    if (textTexture2 == NULL) {
+        printf("Error creating texture (line 2): %s\n", SDL_GetError());
+        SDL_FreeSurface(textSurface1);
+        SDL_FreeSurface(textSurface2);
+        SDL_DestroyTexture(textTexture1);
+        game_is_running = false;
+    }
+
+    // Free the surfaces after creating textures
+    SDL_FreeSurface(textSurface1);
+    SDL_FreeSurface(textSurface2);
+
+    // Show cursor
+    SDL_ShowCursor(true);
+
+    // Set background color and clear the renderer
+    SDL_SetRenderDrawColor(Renderer, 22, 22, 22, 255);
+    SDL_RenderClear(Renderer);
+
+    // Render line 1 (GameOver) at the center
+    SDL_Rect textRect1;
+    SDL_QueryTexture(textTexture1, NULL, NULL, &textRect1.w, &textRect1.h);
+    textRect1.x = (WINDOW_WIDTH - textRect1.w) / 2;
+    textRect1.y = (WINDOW_HEIGHT - textRect1.h) / 2 - 20; // Slight adjustment to move the text up
+
+    SDL_RenderCopy(Renderer, textTexture1, NULL, &textRect1);
+
+    // Render line 2 (Enter Any key...) slightly below the first line
+    SDL_Rect textRect2;
+    SDL_QueryTexture(textTexture2, NULL, NULL, &textRect2.w, &textRect2.h);
+    textRect2.x = (WINDOW_WIDTH - textRect2.w) / 2;
+    textRect2.y = textRect1.y + textRect1.h + 10; // 10 pixels below the first line
+
+    SDL_RenderCopy(Renderer, textTexture2, NULL, &textRect2);
+
+    // Present the updated renderer with both lines of text
     SDL_RenderPresent(Renderer);
-    SDL_Delay(5000);
-    game_is_running = false;
+
+    // Clean up textures
+    SDL_DestroyTexture(textTexture1);
+    SDL_DestroyTexture(textTexture2);
 }
 
 int i = 0;
@@ -855,8 +905,7 @@ void zombieRender(void) {
                 arr[size++] = z;
                 continue;
             }
-        }
-        else if (zombie->idle) {
+        } else if (zombie->idle) {
             spriteChangeRate = 9;
             srcRect.x = idle[zombie->current_frame];
         } else if (zombie->attackPlayer) {
@@ -883,7 +932,7 @@ void zombieRender(void) {
             srcRect.w, SPRITE_HEIGHT
         };
 
-        if (abs(dist_To_player) <= 25 && (player_Y - zombie->y >= -40) && !zombie->dead) {
+        if (abs(dist_To_player) <= 25 && (player_Y - zombie->y >= -40) && !zombie->dead){
             if (collisionDetection(player_X, player_Y, 50, ActualSpriteHeight, zombie->x, zombie->y, 50, ActualSpriteHeight)) {
                 zombie->idle = false;
                 zombie->attackPlayer = true;
@@ -903,7 +952,7 @@ void zombieRender(void) {
             zombie->idle = true;
         }
 
-        if(zombie->attackPlayer && !zombie->dead){
+        if(zombie->attackPlayer && !zombie->dead)
             if (zombie->current_frame == 2){
                 if (collisionDetection(player_X, player_Y, 50, ActualSpriteHeight, zombie->x, zombie->y, 50, ActualSpriteHeight)){
                     playerHealth = (int)playerHealth;
@@ -911,7 +960,7 @@ void zombieRender(void) {
                     playerHealth = (float)playerHealth;
                 }
             }
-        }
+
         if (debug) {
             SDL_SetRenderDrawColor(Renderer, 255, 0, 0, 255);
             dstRect.h -= ActualSpriteHeight;
@@ -924,9 +973,8 @@ void zombieRender(void) {
         flip = (dist_To_player < 0) ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE;
 
         // ZombieSprite
-        if (zombie->dead){
+        if (zombie->dead)
             SDL_RenderCopyEx(Renderer, ZombieDeadTexture, &srcRect, &dstRect, 0, 0, flip);
-        }
         else if (zombie->idle)
             SDL_RenderCopy(Renderer, ZombieIdleTexture, &srcRect, &dstRect);
         else if (zombie->attackPlayer)
@@ -940,9 +988,8 @@ void zombieRender(void) {
 }
 
 bool healthBar(int x, int y, float health, bool Player) {
-    if (health <= 0) {
+    if (health <= 0)
         return false;
-    }
 
     // Draw Sprint Bar
     if (Player){
@@ -1014,9 +1061,6 @@ void DestroyWindow(void){
 
     SDL_DestroyRenderer(Renderer);
     SDL_DestroyWindow(Window);
-
-    SDL_FreeSurface(textSurface);
-    SDL_DestroyTexture(textTexture);
 
     IMG_Quit();
     SDL_Quit();
