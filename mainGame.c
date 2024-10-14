@@ -38,6 +38,7 @@ bool jumping;
 float playerHealth = 100.0;
 float playerJumpForce = 100.0;
 bool playerDead = false;
+bool gameIsOver = false;
 
 bool playerOnGround = false;
 float lastTimeOfPlayerOnGround = 0;
@@ -95,7 +96,7 @@ int main(){
     // Game Loop
     while (game_is_running) {
         ProcessInput();
-        if (!playerDead){
+        if (!gameIsOver){
             if (gamePause){
                 Paused();
                 continue;
@@ -335,7 +336,7 @@ void ProcessInput(void){
                 game_is_running = false;
                 break;
             case SDL_KEYDOWN:
-                if (playerDead)
+                if (gameIsOver)
                     game_is_running = false;
                 switch (event.key.keysym.sym) {
                     case SDLK_ESCAPE:
@@ -348,26 +349,28 @@ void ProcessInput(void){
                             SDL_ShowCursor(SDL_DISABLE);
                         }
                         break;
-                    case SDLK_a:
-                    case SDLK_LEFT:
-                        moveLR = -1;
-                        break;
-                    case SDLK_d:
-                    case SDLK_RIGHT:
-                        moveLR = 1;
-                        break;
-                    case SDLK_w:
-                    case SDLK_UP:
-                    case SDLK_SPACE:
-                        if (playerJumpForce > 0 && playerJumpForce > 20)
-                            jumping = true;
-                        break;
-                    case SDLK_f:
-                        shoot = true;
-                        break;
-                    case SDLK_k:
-                        debug = !debug;
-                        break;
+                    if (!playerDead){
+                        case SDLK_a:
+                        case SDLK_LEFT:
+                            moveLR = -1;
+                            break;
+                        case SDLK_d:
+                        case SDLK_RIGHT:
+                            moveLR = 1;
+                            break;
+                        case SDLK_w:
+                        case SDLK_UP:
+                        case SDLK_SPACE:
+                            if (playerJumpForce > 0 && playerJumpForce > 20)
+                                jumping = true;
+                            break;
+                        case SDLK_f:
+                            shoot = true;
+                            break;
+                        case SDLK_k:
+                            debug = !debug;
+                            break;
+                    }
                 }
                 break;
             case SDL_KEYUP:
@@ -584,7 +587,7 @@ void Render(void){
 
     // Render Other:
     otherRender();
-    if (playerDead)
+    if (gameIsOver)
         gameOver();
     SDL_RenderPresent(Renderer); // Show rendered frame to user.
 }
@@ -605,8 +608,28 @@ void playerRender(void) {
     // If the direction is left, flip the sprite horizontally
     if (playerDirection == -1)
         flip = SDL_FLIP_HORIZONTAL;
+    if (playerDead){
+        spriteInSpriteSheet = 4;
+        if (current_frame > spriteInSpriteSheet){
+            SDL_Delay(1000);
+            gameIsOver = true;
+        }
+        int dead[]= {25, 150, 280, 400, 560};
+        mulFactor = 0.5;
+        SDL_Rect src_rect = {
+            dead[current_frame],
+            0, 80, SPRITE_HEIGHT
+        };
+        SDL_Rect dst_rect = {(int)player_X, (int)player_Y, src_rect.w, src_rect.h};
 
-    // int dead[]= {0, 130, 280, 400, 560};
+        SDL_RenderCopyEx(Renderer, PlayerDeadTexture, &src_rect, &dst_rect, 0, NULL, flip);
+
+        if ((SDL_GetTicks() - last_frame_time_for_idle) > 1000 / (spriteInSpriteSheet * mulFactor)) {
+            current_frame = (current_frame + 1);
+            last_frame_time_for_idle = SDL_GetTicks();
+        }
+        return;
+    }
 
     if (player_Y < (WINDOW_HEIGHT - ground_height - SPRITE_HEIGHT)) {
         spriteInSpriteSheet = 7;  //frames in jump animation
@@ -686,8 +709,12 @@ void playerRender(void) {
         current_frame = (current_frame + 1) % spriteInSpriteSheet;
         last_frame_time_for_idle = SDL_GetTicks();
     }
-    if (!healthBar(player_X, player_Y, playerHealth, true))
-        playerDead = true;
+    if (!playerDead){
+        if (!healthBar(player_X, player_Y, playerHealth, true)){
+            playerDead = true;
+            current_frame = 0;
+        }
+    }
 }
 
 void bulletData(int X, int Y, bool facingDirection) {
@@ -929,12 +956,12 @@ void zombieRender(void) {
             srcRect.w, SPRITE_HEIGHT
         };
 
-        if (abs(dist_To_player) <= 25 && (player_Y - zombie->y >= -40) && !zombie->dead){
+        if (abs(dist_To_player) <= 25 && (player_Y - zombie->y >= -40) && !zombie->dead && !playerDead){
             if (collisionDetection(player_X, player_Y, 50, ActualSpriteHeight, zombie->x, zombie->y, 50, ActualSpriteHeight)) {
                 zombie->idle = false;
                 zombie->attackPlayer = true;
             }
-        } else if (abs(dist_To_player) > 25 && abs(dist_To_player) < (WINDOW_WIDTH - 10) && followPlayer && !zombie->dead) {
+        } else if (abs(dist_To_player) > 25 && abs(dist_To_player) < (WINDOW_WIDTH - 10) && followPlayer && !zombie->dead && !playerDead) {
             zombie->attackPlayer = false;
             zombie->idle = false;
             int resultOfRandom = rand() % 100 + 50;
@@ -944,12 +971,14 @@ void zombieRender(void) {
             else if (dist_To_player >= 25)
                 zombie->x += movementSpeed * (float)dist_To_player / abs(dist_To_player);
         }
-        if (!followPlayer && !zombie->dead){
+        if (!followPlayer && !zombie->dead && !playerDead){
             zombie->attackPlayer = false;
             zombie->idle = true;
         }
+        if (playerDead)
+            zombie->current_frame = 3;
 
-        if(zombie->attackPlayer && !zombie->dead)
+        if(zombie->attackPlayer && !zombie->dead && !playerDead)
             if (zombie->current_frame == 2){
                 if (collisionDetection(player_X, player_Y, 50, ActualSpriteHeight, zombie->x, zombie->y, 50, ActualSpriteHeight)){
                     playerHealth = (int)playerHealth;
