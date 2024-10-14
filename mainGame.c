@@ -275,6 +275,7 @@ void Paused(void) {
     SDL_Rect textRect;
     SDL_Texture* textTexture = SDL_CreateTextureFromSurface(Renderer, textSurface);
     SDL_QueryTexture(textTexture, NULL, NULL, &textRect.w, &textRect.h);
+    SDL_FreeSurface(textSurface);
 
     textRect.x = (WINDOW_WIDTH - textRect.w) / 2;
     textRect.y = (WINDOW_HEIGHT - textRect.h) / 2 - WINDOW_HEIGHT / 5;
@@ -305,6 +306,7 @@ void Paused(void) {
         SDL_RenderDrawRect(Renderer, &exitButton_dest_rect);
 
     SDL_RenderPresent(Renderer);
+    SDL_DestroyTexture(textTexture);
     SDL_FreeSurface(textSurface);
 }
 
