@@ -306,7 +306,6 @@ void Paused(void) {
 
     SDL_RenderPresent(Renderer);
     SDL_DestroyTexture(textTexture);
-    SDL_FreeSurface(textSurface);
 }
 
 // Function to process keyboard input
