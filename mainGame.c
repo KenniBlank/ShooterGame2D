@@ -95,16 +95,14 @@ int main(){
     // Game Loop
     while (game_is_running) {
         ProcessInput();
-        if (playerDead){
-            gameOver();
-            continue;
+        if (!playerDead){
+            if (gamePause){
+                Paused();
+                continue;
+            }
+            Update();
+            Render();
         }
-        if (gamePause){
-            Paused();
-            continue;
-        }
-        Update();
-        Render();
     }
     DestroyWindow();
     return 0; // 0 is success
@@ -415,7 +413,6 @@ void Update(void) {
         zombie_frame_time = SDL_GetTicks();
     }
 
-
     delta_time = (SDL_GetTicks() - last_frame_time) / 1000.0f;
     last_frame_time = SDL_GetTicks();
 
@@ -587,7 +584,8 @@ void Render(void){
 
     // Render Other:
     otherRender();
-
+    if (playerDead)
+        gameOver();
     SDL_RenderPresent(Renderer); // Show rendered frame to user.
 }
 
@@ -771,7 +769,6 @@ void bulletRender(void){
 };
 
 void gameOver(void){
-
     TTF_Font* font = TTF_OpenFont("textFont/AmaticSC-Regular.ttf", 40);
     if (font == NULL){
         printf("Error opening Font: %s", TTF_GetError());
@@ -790,6 +787,7 @@ void gameOver(void){
 
     textColor.g = 255;
     textColor.b = 255;
+    font = TTF_OpenFont("textFont/AmaticSC-Regular.ttf", 30);
     SDL_Surface* textSurface2 = TTF_RenderText_Solid(font, line2, textColor);
     if (textSurface2 == NULL) {
         printf("Error rendering text (line 2): %s\n", TTF_GetError());
@@ -840,9 +838,6 @@ void gameOver(void){
     textRect2.y = textRect1.y + textRect1.h + 10; // 10 pixels below the first line
 
     SDL_RenderCopy(Renderer, textTexture2, NULL, &textRect2);
-
-    // Present the updated renderer with both lines of text
-    SDL_RenderPresent(Renderer);
 
     // Clean up textures
     SDL_DestroyTexture(textTexture1);
