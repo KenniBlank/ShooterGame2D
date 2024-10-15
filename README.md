@@ -13,11 +13,11 @@ Check out [X](https://x.com/birajtwr) for gameplay of the latest development!
 - On windows, working on right now...
 
 ## Game Control:
-- *A LeftArrow*: For moving character to the left.
-- *D RightArrow*: For Moving character to the right.
-- *W Space UpArrow*: For using the zet of character.
-- *K*: Debug Mode (Currently Shows Red overlay over the entities)
-- *F*: Shoot Bullet.
+- **A / LeftArrow**: For moving character to the left.
+- **D / RightArrow**: For Moving character to the right.
+- **W / Space / UpArrow**: For using the zet of character.
+- **K**: Debug Mode (Currently Shows Red overlay over the entities)
+- **F**: Shoot Bullet.
 
 ## Contributors & Helpers:
 - [9x14s](https://github.com/9x14S):
