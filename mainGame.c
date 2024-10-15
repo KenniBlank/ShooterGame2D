@@ -270,7 +270,7 @@ void Paused(void) {
     cursorRect.x = mouseX - 5;
     cursorRect.y = mouseY - 5;
 
-    font = TTF_OpenFont("textFont/AmaticSC-Regular.ttf", 40);
+    font = TTF_OpenFont("./textFont/AmaticSC-Regular.ttf", 40);
     SDL_Color textColor = {255, 0, 0, 255};
 
     SDL_Surface* textSurface = TTF_RenderText_Solid(font, "Game Paused", textColor);
@@ -508,7 +508,7 @@ void otherRender(void){
     dstRect.h = 20;
     SDL_RenderCopyEx(Renderer, BulletTexture, &srcRect, &dstRect, -45, NULL, 0);
 
-    font = TTF_OpenFont("textFont/textFonts.ttf", 24);
+    font = TTF_OpenFont("./textFont/textFonts.ttf", 24);
     SDL_Color textColor = {0, 0, 0, 255};  // Black color for text
     SDL_Rect textRect;
     char text[20];  // Buffer large enough to hold both texts
@@ -797,7 +797,7 @@ void bulletRender(void){
 };
 
 void gameOver(void){
-    font = TTF_OpenFont("textFont/AmaticSC-Regular.ttf", 40);
+    font = TTF_OpenFont("./textFont/AmaticSC-Regular.ttf", 40);
     if (font == NULL){
         printf("Error opening Font: %s", TTF_GetError());
         game_is_running = false;
@@ -816,7 +816,7 @@ void gameOver(void){
     textColor.g = 255;
     textColor.b = 255;
     TTF_CloseFont(font);
-    font = TTF_OpenFont("textFont/AmaticSC-Regular.ttf", 30);
+    font = TTF_OpenFont("./textFont/AmaticSC-Regular.ttf", 30);
     SDL_Surface* textSurface2 = TTF_RenderText_Solid(font, line2, textColor);
     if (textSurface2 == NULL) {
         printf("Error rendering text (line 2): %s\n", TTF_GetError());
