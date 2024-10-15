@@ -1,4 +1,12 @@
 # ShooterGame2D
+Prerequirements:
+On Linux:
+```bash
+sudo apt install libsdl2-2.0-0 libsdl2-ttf-2.0-0 libsdl2-image-2.0-0
+```
+On windows, working on finding the correct dll files
+
+
 WASD for movement. F for shoot, K for debug mode(basically shows rectangle overlay)  
 Creating game in C like a chad
 ![alt text](image.png)
