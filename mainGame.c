@@ -504,6 +504,7 @@ void otherRender(void){
     TTF_Font* font = TTF_OpenFont("textFont/textFonts.ttf", 24);
     if (font == NULL) {
         printf("Error: %s", TTF_GetError());
+        game_is_running = false;
         return;
     }
 
