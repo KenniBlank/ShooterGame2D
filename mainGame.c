@@ -116,12 +116,14 @@ int InitializeWindow(void){
         fprintf(stderr,"Error: %s",SDL_GetError());
         return false;
     }
+
     // Initialize SDL_ttf
     if (TTF_Init() != 0) {
         printf("TTF_Init Error: %s\n", TTF_GetError());
         SDL_Quit();
         return 1;
     }
+
     Window = SDL_CreateWindow(GameTitle,
         SDL_WINDOWPOS_CENTERED,
         SDL_WINDOWPOS_CENTERED,
@@ -132,11 +134,13 @@ int InitializeWindow(void){
         fprintf(stderr,"Error: %s",SDL_GetError());
         return false;
     }
+
     Renderer = SDL_CreateRenderer(Window, -1, 0);
     if (!Renderer){
         fprintf(stderr,"Error: %s",SDL_GetError());
         return false;
     }
+
     SDL_ShowCursor(SDL_DISABLE); // Disable Mouse
     if (IMG_Init(IMG_INIT_PNG) == 0) {
         fprintf(stderr, "Error: %s", IMG_GetError());
@@ -167,8 +171,12 @@ SDL_Texture* ExitGameButtonTexture;
 int ground_height;
 SDL_Rect background_img_src_rect;
 SDL_Rect background_img_dest_rect;
+
+TTF_Font* font = NULL;
+
 int SetUp(void){
-    srand(time(NULL));
+    srand(time(NULL)); // for randomizing
+
     // Sprite rendering:
     BackgroundTexture = IMG_LoadTexture(Renderer, "sprite/Background/1.png");
 
@@ -262,7 +270,7 @@ void Paused(void) {
     cursorRect.x = mouseX - 5;
     cursorRect.y = mouseY - 5;
 
-    TTF_Font* font = TTF_OpenFont("textFont/AmaticSC-Regular.ttf", 40);
+    font = TTF_OpenFont("textFont/AmaticSC-Regular.ttf", 40);
     SDL_Color textColor = {255, 0, 0, 255};
 
     SDL_Surface* textSurface = TTF_RenderText_Solid(font, "Game Paused", textColor);
@@ -304,8 +312,9 @@ void Paused(void) {
     if(collisionDetection(cursorRect.x, cursorRect.y, cursorRect.w, cursorRect.h, exitButton_dest_rect.x, exitButton_dest_rect.y, exitButton_dest_rect.w, exitButton_dest_rect.h))
         SDL_RenderDrawRect(Renderer, &exitButton_dest_rect);
 
-    SDL_RenderPresent(Renderer);
+    TTF_CloseFont(font);
     SDL_DestroyTexture(textTexture);
+    SDL_RenderPresent(Renderer);
 }
 
 // Function to process keyboard input
@@ -499,15 +508,7 @@ void otherRender(void){
     dstRect.h = 20;
     SDL_RenderCopyEx(Renderer, BulletTexture, &srcRect, &dstRect, -45, NULL, 0);
 
-    // Text
-    // Font initialization
-    TTF_Font* font = TTF_OpenFont("textFont/textFonts.ttf", 24);
-    if (font == NULL) {
-        printf("Error: %s", TTF_GetError());
-        game_is_running = false;
-        return;
-    }
-
+    font = TTF_OpenFont("textFont/textFonts.ttf", 24);
     SDL_Color textColor = {0, 0, 0, 255};  // Black color for text
     SDL_Rect textRect;
     char text[20];  // Buffer large enough to hold both texts
@@ -548,7 +549,7 @@ void otherRender(void){
     textRect.y = 65;
     SDL_RenderCopy(Renderer, textTexture, NULL, &textRect);
 
-
+    TTF_CloseFont(font);
     SDL_FreeSurface(textSurface);
     SDL_DestroyTexture(textTexture);
 }
@@ -796,7 +797,7 @@ void bulletRender(void){
 };
 
 void gameOver(void){
-    TTF_Font* font = TTF_OpenFont("textFont/AmaticSC-Regular.ttf", 40);
+    font = TTF_OpenFont("textFont/AmaticSC-Regular.ttf", 40);
     if (font == NULL){
         printf("Error opening Font: %s", TTF_GetError());
         game_is_running = false;
@@ -814,6 +815,7 @@ void gameOver(void){
 
     textColor.g = 255;
     textColor.b = 255;
+    TTF_CloseFont(font);
     font = TTF_OpenFont("textFont/AmaticSC-Regular.ttf", 30);
     SDL_Surface* textSurface2 = TTF_RenderText_Solid(font, line2, textColor);
     if (textSurface2 == NULL) {
@@ -867,6 +869,7 @@ void gameOver(void){
     SDL_RenderCopy(Renderer, textTexture2, NULL, &textRect2);
 
     // Clean up textures
+    TTF_CloseFont(font);
     SDL_DestroyTexture(textTexture1);
     SDL_DestroyTexture(textTexture2);
 }
@@ -1089,5 +1092,6 @@ void DestroyWindow(void){
     SDL_DestroyWindow(Window);
 
     IMG_Quit();
+    TTF_Quit();
     SDL_Quit();
 }
