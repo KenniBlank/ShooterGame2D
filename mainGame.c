@@ -1070,6 +1070,7 @@ int collisionDetection(int x1, int y1, int width1, int height1, int x2, int y2, 
 void DestroyWindow(void){
     free(bullets);
     free(zombies);
+
     SDL_DestroyTexture(BackgroundTexture);
 
     SDL_DestroyTexture(PlayerRunTexture);
