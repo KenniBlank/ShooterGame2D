@@ -77,7 +77,7 @@ typedef struct{
     bool moving;
 } Platform;
 Platform *platforms = NULL;
-
+unsigned short int platformCount = 0;
 
 
 int InitializeWindow(void);
@@ -779,6 +779,7 @@ void bulletCollisionSystem(void){
 
     bulletRemove(removeIndex, totalremove);
     free(removeIndex);  // Free the remove index array
+    removeIndex = NULL;
 }
 
 
@@ -1022,6 +1023,7 @@ void zombieRender(void) {
     if (size > 0)
         removeZombie(arr, size);
     free(arr);
+    arr = NULL;
 }
 
 bool healthBar(int x, int y, float health, bool Player) {
@@ -1078,6 +1080,8 @@ int collisionDetection(int x1, int y1, int width1, int height1, int x2, int y2, 
 void DestroyWindow(void){
     free(bullets);
     free(zombies);
+    bullets = NULL;
+    zombies = NULL;
 
     SDL_DestroyTexture(BackgroundTexture);
 
