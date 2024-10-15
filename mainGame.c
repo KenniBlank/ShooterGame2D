@@ -45,7 +45,7 @@ float lastTimeOfPlayerOnGround = 0;
 bool followPlayer = false;
 
 int mouseX, mouseY;
-int bulletTotal = 200;
+int totalBulletInInventory = 200;
 double distanceTravelledByPlayerFromSpawn = 0;
 
 float zombie_Y;
@@ -70,6 +70,14 @@ typedef struct{
 Bullet *bullets = NULL;
 unsigned short int bulletVelocity = 300;
 unsigned short int bulletCount = 0;
+
+typedef struct{
+    int width, height;
+    float x, y;
+    bool moving;
+} Platform;
+Platform *platforms = NULL;
+
 
 
 int InitializeWindow(void);
@@ -513,8 +521,8 @@ void otherRender(void){
     SDL_Rect textRect;
     char text[20];  // Buffer large enough to hold both texts
 
-    // First line: Display bulletTotal
-    sprintf(text, "x %d", bulletTotal);  // Format the first line
+    // First line: Display totalBulletInInventory
+    sprintf(text, "x %d", totalBulletInInventory);  // Format the first line
     SDL_Surface* textSurface = TTF_RenderText_Solid(font, text, textColor);
     if (textSurface == NULL) {
         printf("Error: %s", TTF_GetError());
@@ -679,7 +687,7 @@ void playerRender(void) {
     }
 
     if (shoot && (SDL_GetTicks() - shooting_last_frame) > (120)){
-        if (bulletTotal > 0){
+        if (totalBulletInInventory > 0){
             if (src_rect.x != 45 + addFactor * 2.98 * current_frame){
                 if (flip == SDL_FLIP_NONE){
                     bulletData(player_X, player_Y, true);
@@ -690,7 +698,7 @@ void playerRender(void) {
                     player_X += delta_time * (rand() % 10 + 20);
                 }
                 shooting_last_frame = SDL_GetTicks();
-                bulletTotal--;
+                totalBulletInInventory--;
             }
         }
     }
