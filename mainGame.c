@@ -103,7 +103,7 @@ void Paused(void);
   #include <windows.h>
   int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevIns, LPSTR lpszArgument, int iShow)
 #else
-  int main() {
+  int main(int argc, char *argv[]) {
 #endif
     game_is_running = InitializeWindow();
     SetUp();
