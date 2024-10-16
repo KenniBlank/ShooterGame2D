@@ -41,6 +41,7 @@ bool playerDead = false;
 bool gameIsOver = false;
 float lastTimeOfPlayerOnGround = 0;
 bool followPlayer = false;
+bool playerOnPlatform = false;
 
 int mouseX, mouseY;
 int totalBulletInInventory = 200;
@@ -450,6 +451,7 @@ void Update(void) {
     if (player_Y >= WINDOW_HEIGHT - ground_height - SPRITE_HEIGHT) {
         player_Y = WINDOW_HEIGHT - ground_height - SPRITE_HEIGHT;
         velocityY = 0;
+        playerOnPlatform = true;
         followPlayer = true;
         lastTimeOfPlayerOnGround = SDL_GetTicks();
         playerJumpForce += 20 * delta_time;
@@ -660,16 +662,16 @@ int ActualSpriteHeight = 2 * (int)(SPRITE_HEIGHT / 5);
 void platformRender(void) {
     // Set draw color for the platforms
     SDL_SetRenderDrawColor(Renderer, 255, 0, 0, 255); // Set to red or desired color
+    platformSpawnLogic(5); // Spawn platforms: Will be updated soon
 
-    platformSpawnLogic(5); // Spawn platforms
     SDL_Rect playerRect = {player_X+13, player_Y, 25, SPRITE_HEIGHT};
     for (int i = 0; i < platformsInScreen; i++) {
         SDL_Rect dst_rect = {platforms[i].x, platforms[i].y, platforms[i].width, platforms[i].height};
         SDL_RenderDrawRect(Renderer, &dst_rect);
-        SDL_RenderDrawRect(Renderer, &playerRect);
         if (isRectOnTop(playerRect, dst_rect) && !jumping){
             player_Y = platforms[i].y - SPRITE_HEIGHT;
             velocityY = 0;
+            playerOnPlatform = true;
             lastTimeOfPlayerOnGround = SDL_GetTicks();
             playerJumpForce += 20 * delta_time;
         }
