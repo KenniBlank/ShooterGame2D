@@ -99,7 +99,7 @@ bool gamePause = false;
 float pause_start_time_tick = 0;
 void Paused(void);
 
-#ifdef _WIN32
+#if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__)
   #include <windows.h>
   int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevIns, LPSTR lpszArgument, int iShow)
 #else
