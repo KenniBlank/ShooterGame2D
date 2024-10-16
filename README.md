@@ -31,9 +31,12 @@ To build and run PLACEHOLDER, ensure you have the following installed:
 
 #### Windows
 - MinGW:
-  - Download the latest releases of SDL2, SDL2_image, and SDL2_ttf from their respective GitHub repositories.
-  - Extract the non-devel files to the project root, and copy the `.dll` files there.
-  - Extract the `-devel-` files, navigate to their directories, and execute `make native` to install headers at `/usr`.
+  - Download the latest releases of SDL2, SDL2_image, and SDL2_ttf from the SDL GitHub repositories:
+    - [SDL2](https://github.com/libsdl-org/SDL/releases/latest) download `SDL2-<version>-win32-x64.zip`
+    - [SDL2_image](https://github.com/libsdl-org/SDL_image/releases/latest) download appropriate `SDL2_image-<version>.zip`
+    - [SDL2_ttf](https://github.com/libsdl-org/SDL_ttf/releases/latest) download appropriate `SDL2_ttf-<version>.zip`
+  - Extract the downloaded files to a temporary directory.
+  - Copy only the `.dll` files from the extracted directories to the project root directory.
 
 ## Building the Game
 To compile the game, navigate to the project root and run:
@@ -54,10 +57,6 @@ This generates an executable `game` on Linux or `game.exe` on Windows.
 <a href="https://github.com/KenniBlank/ShooterGame2D/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=KenniBlank/ShooterGame2D" />
 </a>
-
-
-
-
 
 ## Credits
 - **Sprites**: All sprites used in this game are sourced from [Craftpix.net](https://craftpix.net)
