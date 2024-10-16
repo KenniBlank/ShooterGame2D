@@ -4,6 +4,7 @@ SOURCE = mainGame.c
 
 ifeq ($(OS),Windows_NT)
 	GAME = "game.exe"
+	CFLAGS += -L ./
 else
 	GAME = "game"
 endif
