@@ -92,13 +92,19 @@ void Render(void);
         void bulletRender(void);
         void gameOver(void);
     bool healthBar(int x, int y, float health, bool Player);
-void DestroyWindow(void);
+void DestroyWindowInternal(void);
 
 int collisionDetection(int x1, int y1, int width1, int height1, int x2, int y2, int width2, int height2);
 bool gamePause = false;
 float pause_start_time_tick = 0;
 void Paused(void);
-int main(){
+
+#if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__)
+  #include <windows.h>
+  int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevIns, LPSTR lpszArgument, int iShow) {
+#else
+  int main(int argc, char *argv[]) {
+#endif
     game_is_running = InitializeWindow();
     SetUp();
     // Game Loop
@@ -113,7 +119,7 @@ int main(){
             Render();
         }
     }
-    DestroyWindow();
+    DestroyWindowInternal();
     return 0; // 0 is success
 }
 
@@ -1077,7 +1083,7 @@ int collisionDetection(int x1, int y1, int width1, int height1, int x2, int y2, 
 }
 
 // Function to clear all the things the game has started
-void DestroyWindow(void){
+void DestroyWindowInternal(void){
     free(bullets);
     free(zombies);
     bullets = NULL;
