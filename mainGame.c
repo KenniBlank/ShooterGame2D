@@ -39,8 +39,6 @@ float playerHealth = 100.0;
 float playerJumpForce = 100.0;
 bool playerDead = false;
 bool gameIsOver = false;
-
-bool playerOnGround = false;
 float lastTimeOfPlayerOnGround = 0;
 bool followPlayer = false;
 
@@ -75,9 +73,10 @@ typedef struct{
     int width, height;
     float x, y;
     bool moving;
+    float time_till_deletion;
 } Platform;
 Platform *platforms = NULL;
-unsigned short int platformCount = 0;
+unsigned short int platformsInScreen = 0;
 
 
 int InitializeWindow(void);
@@ -87,6 +86,7 @@ void ProcessInput(void);
 void Update(void);
     void bulletData(int X, int Y, bool facingDirection);
 void Render(void);
+    void platformRender(void);
     void zombieRender(void);
     void playerRender(void);
         void bulletRender(void);
@@ -450,7 +450,6 @@ void Update(void) {
     if (player_Y >= WINDOW_HEIGHT - ground_height - SPRITE_HEIGHT) {
         player_Y = WINDOW_HEIGHT - ground_height - SPRITE_HEIGHT;
         velocityY = 0;
-        playerOnGround = true;
         followPlayer = true;
         lastTimeOfPlayerOnGround = SDL_GetTicks();
         playerJumpForce += 20 * delta_time;
@@ -467,6 +466,8 @@ void Update(void) {
             zombies[i].x -= parallaxValue;
         for (int i = 0; i < bulletCount; i++)
             bullets[i].x -= parallaxValue;
+        for (int i = 0; i < platformsInScreen; i++)
+            platforms[i].x -= parallaxValue;
     }
     else if (player_X < (float)WINDOW_WIDTH * (leftCam/5)){
         background_img_src_rect.x -= 50 * delta_time;
@@ -478,6 +479,8 @@ void Update(void) {
             zombies[i].x += parallaxValue;
         for (int i = 0; i < bulletCount; i++)
             bullets[i].x += parallaxValue;
+        for (int i = 0; i < platformsInScreen; i++)
+            platforms[i].x += parallaxValue;
     }
 
     // Healing Ability
@@ -594,6 +597,9 @@ void Render(void){
     ground_rect.h = 2;
     SDL_RenderFillRect(Renderer, &ground_rect);
 
+    // Spawn Platforms for player to jump into
+    platformRender();
+
     // Sprite Animation:
     zombieRender();
     playerRender();
@@ -607,9 +613,72 @@ void Render(void){
     SDL_RenderPresent(Renderer); // Show rendered frame to user.
 }
 
+void platformSpawnLogic(int no_of_platforms) {
+    if (platformsInScreen >= 5)
+        return; // Prevent exceeding the limit
+
+    if (platforms == NULL) {
+        platforms = malloc(sizeof(Platform) * no_of_platforms);
+        if (platforms == NULL) {
+            // Handle allocation failure
+            return;
+        }
+    } else {
+        Platform *new_platforms = realloc(platforms, sizeof(Platform) * (platformsInScreen + no_of_platforms));
+        if (new_platforms == NULL) {
+            // Handle allocation failure
+            return; // Keep the original pointer
+        }
+        platforms = new_platforms;
+    }
+
+    // Spawn each platform
+    for (int i = 0; i < no_of_platforms && platformsInScreen < 5; i++) {
+        platforms[platformsInScreen].x = platformsInScreen * (rand() % 700 + 200);
+        platforms[platformsInScreen].y = 200 + (rand() % 50 + 50);
+        platforms[platformsInScreen].width = 100 + (rand() % 20 * -1);
+        platforms[platformsInScreen].height = 10 + (rand() % 10 - 4);
+        platformsInScreen++;
+    }
+}
+
+bool isRectOnTop(SDL_Rect playerRect, SDL_Rect dst_rect) {
+    // if (collisionDetection(playerRect.x, playerRect.y, playerRect.w, playerRect.h, dst_rect.x, dst_rect.y, dst_rect.w, dst_rect.h) != 1)
+    //     return false;
+    return (playerRect.y + playerRect.h <= dst_rect.y && playerRect.y + playerRect.h >= (dst_rect.y - 5) && playerRect.x < dst_rect.x + dst_rect.w && playerRect.x + playerRect.w > dst_rect.x);
+}
+
+
+
+void platformRemovalLogic(void){
+    // if (collisionDetection(int x1, int y1, int width1, int height1, int x2, int y2, int width2, int height2)){
+
+    // }
+};
+
+int ActualSpriteHeight = 2 * (int)(SPRITE_HEIGHT / 5);
+void platformRender(void) {
+    // Set draw color for the platforms
+    SDL_SetRenderDrawColor(Renderer, 255, 0, 0, 255); // Set to red or desired color
+
+    platformSpawnLogic(5); // Spawn platforms
+    SDL_Rect playerRect = {player_X+13, player_Y, 25, SPRITE_HEIGHT};
+    for (int i = 0; i < platformsInScreen; i++) {
+        SDL_Rect dst_rect = {platforms[i].x, platforms[i].y, platforms[i].width, platforms[i].height};
+        SDL_RenderDrawRect(Renderer, &dst_rect);
+        SDL_RenderDrawRect(Renderer, &playerRect);
+        if (isRectOnTop(playerRect, dst_rect) && !jumping){
+            player_Y = platforms[i].y - SPRITE_HEIGHT;
+            velocityY = 0;
+            lastTimeOfPlayerOnGround = SDL_GetTicks();
+            playerJumpForce += 20 * delta_time;
+        }
+    }
+}
+
+
 int current_frame = 0;
 int playerDirection = 1;
-int ActualSpriteHeight = 2 * (int)(SPRITE_HEIGHT / 5);
 float shooting_last_frame = 0;
 void playerRender(void) {
     SDL_RendererFlip flip = SDL_FLIP_NONE;  // No flip by default
@@ -776,8 +845,15 @@ void bulletCollisionSystem(void){
         for (int j = 0; j < zombieCount; j++){
             if (!zombies[j].dead)
                 if (collisionDetection((int)zombies[j].x, (int)zombies[j].y, 50, (int)ActualSpriteHeight, (int)bullets[i].x, (int)bullets[i].y - 60, 10, 10)){
+                    if (zombies[j].direction == 1)
+                        zombies[j].x += rand() % 5;
+                    else
+                        zombies[j].x -= rand() % 5;
                     removeIndex[totalremove++] = i;
-                    zombies[j].health -= DAMAGE_BY_BULLET;
+                    int damage = DAMAGE_BY_BULLET * (rand() % 2 + 1);
+                    zombies[j].health -= damage;
+                    // if (damage > DAMAGE_BY_BULLET) // future, add headshot to head
+                    //     zombies[j].dead = true;
                     break;
                 }
         }
@@ -1015,6 +1091,7 @@ void zombieRender(void) {
         }
 
         flip = (dist_To_player < 0) ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE;
+        zombie->direction = (dist_To_player < 0) ? 1: -1;
 
         // ZombieSprite
         if (zombie->dead)

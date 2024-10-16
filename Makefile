@@ -8,10 +8,10 @@ ifeq ($(OS),Windows_NT)
 else
 	GAME = "game"
 endif
-	
 
 all:
 	gcc $(SOURCE) -o $(GAME) $(CFLAGS) $(LIBS)
+	./$(GAME)
 
 clean:
 	rm ./$(GAME)
