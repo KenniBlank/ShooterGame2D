@@ -74,7 +74,7 @@ typedef struct{
     int width, height;
     float x, y;
     bool moving;
-    float time_till_deletion;
+    float timer;
 } Platform;
 Platform *platforms = NULL;
 unsigned short int platformsInScreen = 0;
@@ -497,7 +497,7 @@ void Update(void) {
         zombie_Y = WINDOW_HEIGHT - ground_height - SPRITE_HEIGHT;
     if (jumping && playerJumpForce > 0){
         velocityY = jumpVelocity;
-        playerJumpForce -= delta_time * 80;
+        playerJumpForce -= delta_time * 50;
     }
     if (playerJumpForce <= 0)
         playerJumpForce = 0;
@@ -636,18 +636,19 @@ void platformSpawnLogic(int no_of_platforms) {
 
     // Spawn each platform
     for (int i = 0; i < no_of_platforms && platformsInScreen < 5; i++) {
-        platforms[platformsInScreen].x = platformsInScreen * (rand() % 700 + 200);
-        platforms[platformsInScreen].y = 200 + (rand() % 50 + 50);
-        platforms[platformsInScreen].width = 100 + (rand() % 20 * -1);
-        platforms[platformsInScreen].height = 10 + (rand() % 10 - 4);
+        platforms[platformsInScreen].x = platformsInScreen * (rand() % 500 + 200);
+        platforms[platformsInScreen].y = (int)(WINDOW_WIDTH/4) + (rand() % 50 + 50);
+        platforms[platformsInScreen].width = 100 + (rand() % 50 * -1);
+        platforms[platformsInScreen].height = (int)(WINDOW_HEIGHT/40) + (rand() % WINDOW_HEIGHT/60 * -1) + 10;
+        if (platforms[platformsInScreen].height >= 50){
+            platforms[platformsInScreen].height = 50;
+        }
         platformsInScreen++;
     }
 }
 
 bool isRectOnTop(SDL_Rect playerRect, SDL_Rect dst_rect) {
-    // if (collisionDetection(playerRect.x, playerRect.y, playerRect.w, playerRect.h, dst_rect.x, dst_rect.y, dst_rect.w, dst_rect.h) != 1)
-    //     return false;
-    return (playerRect.y + playerRect.h <= dst_rect.y && playerRect.y + playerRect.h >= (dst_rect.y - 5) && playerRect.x < dst_rect.x + dst_rect.w && playerRect.x + playerRect.w > dst_rect.x);
+    return (playerRect.y + playerRect.h <= (dst_rect.y+5) && playerRect.y + playerRect.h >= (dst_rect.y - 5) && playerRect.x < dst_rect.x + dst_rect.w && playerRect.x + playerRect.w > dst_rect.x);
 }
 
 
@@ -667,14 +668,23 @@ void platformRender(void) {
     SDL_Rect playerRect = {player_X+13, player_Y, 25, SPRITE_HEIGHT};
     for (int i = 0; i < platformsInScreen; i++) {
         SDL_Rect dst_rect = {platforms[i].x, platforms[i].y, platforms[i].width, platforms[i].height};
-        SDL_RenderDrawRect(Renderer, &dst_rect);
-        if (isRectOnTop(playerRect, dst_rect) && !jumping){
+
+
+        if (isRectOnTop(playerRect, dst_rect) && (!jumping || playerJumpForce <= 10)){
             player_Y = platforms[i].y - SPRITE_HEIGHT;
             velocityY = 0;
             playerOnPlatform = true;
             lastTimeOfPlayerOnGround = SDL_GetTicks();
             playerJumpForce += 20 * delta_time;
+            platforms[i].timer = SDL_GetTicks();
         }
+
+        SDL_SetRenderDrawColor(Renderer, 49, 91, 43, 255);
+        SDL_RenderFillRect(Renderer, &dst_rect);
+        SDL_SetRenderDrawColor(Renderer, 0, 0, 0, 0);
+        dst_rect.h = 2;
+        SDL_RenderFillRect(Renderer, &dst_rect);
+
     }
 }
 
