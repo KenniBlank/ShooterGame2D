@@ -466,42 +466,33 @@ void Update(void) {
         playerJumpForce += 20 * delta_time;
     }
 
-    // UPDATED: Calculate player movement *before* updating player_X
-    float player_movement = moveLR * delta_time * PLAYER_SPEED; 
-
-    // UPDATED: Update player_X using player_movement
-    player_X += player_movement;
-
-    // UPDATED: Player Position Limiting logic moved here *after* player_X update
-    //int parallaxValue = delta_time * PLAYER_SPEED; // Now use player_movement instead of parallaxValue below
+    int parallaxValue = delta_time * PLAYER_SPEED;
     if (player_X > (float)WINDOW_WIDTH * (rightCam/5)){
+        background_img_src_rect.x += 100 * delta_time;
+        if (background_img_src_rect.x >= background_img_src_rect.w)
+            background_img_src_rect.x = 0;
         player_X = (rightCam/5) * (float)WINDOW_WIDTH;
         distanceTravelledByPlayerFromSpawn += delta_time * 100;
+        for (int i = 0; i < zombieCount; i++)
+            zombies[i].x -= parallaxValue;
+        for (int i = 0; i < bulletCount; i++)
+            bullets[i].x -= parallaxValue;
+        for (int i = 0; i < platformsInScreen; i++)
+            platforms[i].x -= parallaxValue;
     }
     else if (player_X < (float)WINDOW_WIDTH * (leftCam/5)){
+        background_img_src_rect.x -= 50 * delta_time;
+        if (background_img_src_rect.x <= 0)
+            background_img_src_rect.x = background_img_src_rect.w;
         player_X = (leftCam/5) * (float)WINDOW_WIDTH;
         distanceTravelledByPlayerFromSpawn -= delta_time * 100;
+        for (int i = 0; i < zombieCount; i++)
+            zombies[i].x += parallaxValue;
+        for (int i = 0; i < bulletCount; i++)
+            bullets[i].x += parallaxValue;
+        for (int i = 0; i < platformsInScreen; i++)
+            platforms[i].x += parallaxValue;
     }
-
-    // UPDATED: Calculate background scroll based on player movement
-    float background_scroll = player_movement * BACKGROUND_SCROLL_FACTOR;
-
-    // UPDATED: Update background position using background_scroll
-    background_img_src_rect.x += background_scroll;
-
-    // UPDATED: Wrapping logic to prevent screen tearing
-    if (background_img_src_rect.x >= background_img_src_rect.w)
-        background_img_src_rect.x = 0;
-    else if (background_img_src_rect.x <= -background_img_src_rect.w)
-        background_img_src_rect.x = 0;
-
-    // UPDATED: Use player_movement for parallax
-    for (int i = 0; i < zombieCount; i++)
-        zombies[i].x -= player_movement;
-    for (int i = 0; i < bulletCount; i++)
-        bullets[i].x -= player_movement;
-    for (int i = 0; i < platformsInScreen; i++)
-        platforms[i].x -= player_movement;
 
     // Healing Ability
     playerHealth += delta_time;
