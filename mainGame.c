@@ -13,7 +13,7 @@
 #include <SDL2/SDL_image.h>
 #include <SDL2/SDL_ttf.h>
 
-#include <complex.h>
+#include <bits/types/timer_t.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -29,12 +29,12 @@ SDL_Renderer* Renderer = NULL;
 bool game_is_running = false;
 int last_frame_time = 0;
 float delta_time = 0.0f; // This is very important dont delete this ever.
-float player_X = 100;
+float player_X = 0;
 float player_Y = 0;
 int groundLevel = 0;
 int PLAYER_SPEED = 150;
 int spriteInSpriteSheet = 0;
-bool jumping;
+bool jumping = false;
 float playerHealth = 100.0;
 float playerJumpForce = 100.0;
 bool playerDead = false;
@@ -42,10 +42,11 @@ bool gameIsOver = false;
 float lastTimeOfPlayerOnGround = 0;
 bool followPlayer = false;
 bool playerOnPlatform = false;
+bool goDown = false;
 
 int mouseX, mouseY;
 int totalBulletInInventory = 200;
-double distanceTravelledByPlayerFromSpawn = 0;
+int distanceTravelledByPlayerFromSpawn = 0;
 
 float zombie_Y;
 typedef struct {
@@ -190,7 +191,7 @@ SDL_Rect background_img_dest_rect;
 TTF_Font* font = NULL;
 
 int SetUp(void){
-    srand(time(NULL)); // for randomizing
+    srand(69); // for constant randomizing
 
     // Sprite rendering:
     BackgroundTexture = IMG_LoadTexture(Renderer, "sprite/Background/1.png");
@@ -236,7 +237,6 @@ int SetUp(void){
 
     player_Y = WINDOW_HEIGHT - ground_height - SPRITE_HEIGHT;
     zombie_Y = WINDOW_HEIGHT - ground_height - SPRITE_HEIGHT;
-    distanceTravelledByPlayerFromSpawn = 0;
     spawnZombies(1);
     return true;
 }
@@ -387,12 +387,17 @@ void ProcessInput(void){
                             if (playerJumpForce > 0 && playerJumpForce > 20)
                                 jumping = true;
                             break;
+                        case SDLK_s:
+                        case SDLK_DOWN:
+                            goDown = true;
+                            break;
                         case SDLK_f:
                             shoot = true;
                             break;
                         case SDLK_k:
                             debug = !debug;
                             break;
+
                     }
                 }
                 break;
@@ -411,6 +416,10 @@ void ProcessInput(void){
                         break;
                     case SDLK_f:
                         shoot = false;
+                        break;
+                    case SDLK_s:
+                    case SDLK_DOWN:
+                        goDown = false;
                         break;
                 }
                 break;
@@ -622,28 +631,29 @@ void platformSpawnLogic(int no_of_platforms) {
     if (platforms == NULL) {
         platforms = malloc(sizeof(Platform) * no_of_platforms);
         if (platforms == NULL) {
-            // Handle allocation failure
+            // TODO: Handle allocation failure
             return;
         }
     } else {
         Platform *new_platforms = realloc(platforms, sizeof(Platform) * (platformsInScreen + no_of_platforms));
         if (new_platforms == NULL) {
-            // Handle allocation failure
-            return; // Keep the original pointer
+            // TODO: Handle allocation failure
+            return;
         }
         platforms = new_platforms;
     }
 
     // Spawn each platform
+    // distanceTravelledByPlayerFromSpawn; this is the variable on basis of which the generation must take place
     for (int i = 0; i < no_of_platforms && platformsInScreen < 5; i++) {
-        platforms[platformsInScreen].x = platformsInScreen * (rand() % 500 + 200);
-        platforms[platformsInScreen].y = (int)(WINDOW_WIDTH/4) + (rand() % 50 + 50);
-        platforms[platformsInScreen].width = 100 + (rand() % 50 * -1);
-        platforms[platformsInScreen].height = (int)(WINDOW_HEIGHT/40) + (rand() % WINDOW_HEIGHT/60 * -1) + 10;
-        if (platforms[platformsInScreen].height >= 50){
+        platforms[platformsInScreen].y = (int)(WINDOW_WIDTH / 4) + (rand() % 50 + 70);
+        platforms[platformsInScreen].width = 100 + (rand() % 100);
+        platforms[platformsInScreen].x =  rand() % 2 == 0 ? platformsInScreen * platforms[platformsInScreen].width: -1 * platformsInScreen * platforms[platformsInScreen].width;
+        platforms[platformsInScreen].height = (int)(WINDOW_HEIGHT / 40) + (rand() % WINDOW_HEIGHT / 60 * -1) + 10;
+        if (platforms[platformsInScreen].height >= 50)
             platforms[platformsInScreen].height = 50;
-        }
         platformsInScreen++;
+        printf("%d, %f\n", distanceTravelledByPlayerFromSpawn, player_X);
     }
 }
 
@@ -651,47 +661,67 @@ bool isRectOnTop(SDL_Rect playerRect, SDL_Rect dst_rect) {
     return (playerRect.y + playerRect.h <= (dst_rect.y+5) && playerRect.y + playerRect.h >= (dst_rect.y - 5) && playerRect.x < dst_rect.x + dst_rect.w && playerRect.x + playerRect.w > dst_rect.x);
 }
 
-
-
-void platformRemovalLogic(void){
-    // if (collisionDetection(int x1, int y1, int width1, int height1, int x2, int y2, int width2, int height2)){
-
-    // }
+void platformRemoval(int size, int arr[]){
+    // Remove Platform if it is out of screen
+    // if player has remained atop of platform for more than 5 seconds.
+    for (int i = 0; i < size; i++) {
+        int index = arr[i] - i;
+        for (int j = index; j < platformsInScreen - 1; j++)
+            platforms[j] = platforms[j + 1];  // Shift the other array element one step left: Clever RIGHT!!!
+    }
+    platformsInScreen -= size;
 };
 
-int ActualSpriteHeight = 2 * (int)(SPRITE_HEIGHT / 5);
 void platformRender(void) {
     // Set draw color for the platforms
     SDL_SetRenderDrawColor(Renderer, 255, 0, 0, 255); // Set to red or desired color
-    platformSpawnLogic(5); // Spawn platforms: Will be updated soon
+    platformSpawnLogic(1); // Spawn platforms: Will be updated soon
 
-    SDL_Rect playerRect = {player_X+13, player_Y, 25, SPRITE_HEIGHT};
+    SDL_Rect playerRect = {player_X + 13, player_Y, 25, SPRITE_HEIGHT};
+    int *arr = NULL;
+    int size = 0;
+
     for (int i = 0; i < platformsInScreen; i++) {
         SDL_Rect dst_rect = {platforms[i].x, platforms[i].y, platforms[i].width, platforms[i].height};
 
-
-        if (isRectOnTop(playerRect, dst_rect) && (!jumping || playerJumpForce <= 10)){
+        playerOnPlatform = isRectOnTop(playerRect, dst_rect) && (!jumping || playerJumpForce <= 10) && !goDown;
+        if (playerOnPlatform){
             player_Y = platforms[i].y - SPRITE_HEIGHT;
             velocityY = 0;
-            playerOnPlatform = true;
             lastTimeOfPlayerOnGround = SDL_GetTicks();
             playerJumpForce += 20 * delta_time;
-            platforms[i].timer = SDL_GetTicks();
         }
 
+        // Platform coloring:
         SDL_SetRenderDrawColor(Renderer, 49, 91, 43, 255);
         SDL_RenderFillRect(Renderer, &dst_rect);
-        SDL_SetRenderDrawColor(Renderer, 0, 0, 0, 0);
+        SDL_SetRenderDrawColor(Renderer, 0, 0, 0, 255);
         dst_rect.h = 2;
         SDL_RenderFillRect(Renderer, &dst_rect);
 
+        if (platforms[i].x > 1.5* (WINDOW_WIDTH + platforms[i].width) || platforms[i].x < -15 * platforms[i].width){
+            arr = realloc(arr, size * sizeof(int));
+            if (arr == NULL) {
+                printf("Memory Allocation failed!");
+                game_is_running = false;
+            }
+            arr[size++] = i;
+            continue;
+        }
     }
+
+    // TODO: Not removing Yet
+    if (size > 0)
+        platformRemoval(size, arr);
+    free(arr);
+    arr = NULL;
 }
 
 
 int current_frame = 0;
 int playerDirection = 1;
 float shooting_last_frame = 0;
+int ActualSpriteHeight = 2 * (int)(SPRITE_HEIGHT / 5);
 void playerRender(void) {
     SDL_RendererFlip flip = SDL_FLIP_NONE;  // No flip by default
 
@@ -727,6 +757,7 @@ void playerRender(void) {
         return;
     }
 
+    playerOnPlatform = true;
     if (player_Y < (WINDOW_HEIGHT - ground_height - SPRITE_HEIGHT)) {
         spriteInSpriteSheet = 7;  //frames in jump animation
         n = -8;
@@ -738,6 +769,7 @@ void playerRender(void) {
         else
             current_frame = 4;  // Keep 4th sprite in jump sheet
         player_X += moveLR * delta_time * PLAYER_SPEED;
+        playerOnPlatform = false;
     }
     else if (moveLR && !shoot && player_Y == (WINDOW_HEIGHT - ground_height - SPRITE_HEIGHT)){
         spriteInSpriteSheet = 8;
@@ -791,7 +823,7 @@ void playerRender(void) {
     }
 
     // Only allow the jump animation while in the air
-    if (jumping)
+    if (jumping || (shoot && !playerOnPlatform))
         SDL_RenderCopyEx(Renderer, PlayerJumpTexture, &src_rect, &dst_rect, 0, NULL, flip);
     else if (moveLR && !shoot)
         SDL_RenderCopyEx(Renderer, PlayerRunTexture, &src_rect, &dst_rect, 0, NULL, flip);
@@ -805,12 +837,11 @@ void playerRender(void) {
         current_frame = (current_frame + 1) % spriteInSpriteSheet;
         last_frame_time_for_idle = SDL_GetTicks();
     }
-    if (!playerDead){
+    if (!playerDead)
         if (!healthBar(player_X, player_Y, playerHealth, true)){
             playerDead = true;
             current_frame = 0;
         }
-    }
 }
 
 void bulletData(int X, int Y, bool facingDirection) {
@@ -1048,7 +1079,7 @@ void zombieRender(void) {
         }
 
         // Update animation frame for the zombie
-        if ((SDL_GetTicks() - zombie->last_frame_time) > (1000 / (float)spriteChangeRate * 1.3)){
+        if ((SDL_GetTicks() - zombie->last_frame_time) > (1000 / (float)spriteChangeRate * ((float)(rand()%3) / 10 + 1.3))){ // added random to give a feeling of inconsistency
             zombie->current_frame = (zombie->current_frame + 1) % (spriteChangeRate-1);
             zombie->last_frame_time = SDL_GetTicks();
         }
@@ -1062,7 +1093,7 @@ void zombieRender(void) {
             srcRect.w, SPRITE_HEIGHT
         };
 
-        if (abs(dist_To_player) <= 25 && (player_Y - zombie->y >= -40) && !zombie->dead && !playerDead){
+        if (abs(dist_To_player) <= 25 && abs((int)(player_Y - zombie->y))>= 40 && !zombie->dead && !playerDead){
             if (collisionDetection(player_X, player_Y, 50, ActualSpriteHeight, zombie->x, zombie->y, 50, ActualSpriteHeight)) {
                 zombie->idle = false;
                 zombie->attackPlayer = true;
