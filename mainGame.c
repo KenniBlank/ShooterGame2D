@@ -48,14 +48,6 @@ int mouseX, mouseY;
 int totalBulletInInventory = 200;
 int distanceTravelledByPlayerFromSpawn = 0;
 
-// Bullets are now stored in a linked list for efficient adding/removing
-typedef struct BulletNode {
-    Bullet bullet;
-    struct BulletNode *next;
-} BulletNode;
-
-BulletNode *bullets = NULL;; 
-
 float zombie_Y;
 typedef struct {
     int x, y;           // Position
@@ -75,7 +67,7 @@ typedef struct{
     float x, y;
     bool direction;// True is right and false left
 } Bullet;
-
+Bullet *bullets = NULL;
 unsigned short int bulletVelocity = 300;
 unsigned short int bulletCount = 0;
 
@@ -219,9 +211,7 @@ int SetUp(void){
 
     ResumeButtonTexture = IMG_LoadTexture(Renderer, "sprite/icons/playGame.png");
     ExitGameButtonTexture = IMG_LoadTexture(Renderer, "sprite/icons/exitGame.png");
-    
-    bullets = NULL; // Initialize the linked list
-    
+
     if (!BackgroundTexture || !PlayerIdleTexture ||
         !PlayerRunTexture || !PlayerShootTexture ||
         !PlayerJumpTexture || !PlayerDeadTexture ||
@@ -450,94 +440,58 @@ float leftCam = 2.0;
 void Update(void) {
     // IMP: DELAY LOGIC, 60 fps for now.
     int time_to_wait = FRAME_TARGET_TIME - (SDL_GetTicks() - last_frame_time);
-    if (time_to_wait > 0 && time_to_wait <= FRAME_TARGET_TIME) {
+    if (time_to_wait > 0 && time_to_wait <= FRAME_TARGET_TIME)
         SDL_Delay(time_to_wait);
-    }
 
-    // Zombie spawning logic (using delta_time for accuracy)
-    static float zombie_spawn_timer = 0.0f;
-    zombie_spawn_timer += delta_time;
-    if (zombie_spawn_timer >= (10.0f + (rand() % 20))) { // 10 to 30 seconds
+    if (SDL_GetTicks() - zombie_frame_time > (10000 + rand() % 30000)){ //spawn one zombie every 10-30 sec
         spawnZombies(rand() % 3 + 1);
-        zombie_spawn_timer = 0.0f;
+        zombie_frame_time = SDL_GetTicks();
     }
 
     delta_time = (SDL_GetTicks() - last_frame_time) / 1000.0f;
     last_frame_time = SDL_GetTicks();
 
     velocityY += gravity * delta_time;
-
-    if (player_Y <= (-SPRITE_HEIGHT)) {
+    // Setting a limit to zet
+    if (player_Y <= (-SPRITE_HEIGHT)){
         player_Y = -SPRITE_HEIGHT;
     }
     player_Y += velocityY * delta_time;
-
     if (player_Y >= WINDOW_HEIGHT - ground_height - SPRITE_HEIGHT) {
         player_Y = WINDOW_HEIGHT - ground_height - SPRITE_HEIGHT;
         velocityY = 0;
-        playerOnPlatform = true;  // Player is on the ground or a platform
-        followPlayer = true;      // Allow zombies to follow
+        playerOnPlatform = true;
+        followPlayer = true;
         lastTimeOfPlayerOnGround = SDL_GetTicks();
-        playerJumpForce += 20 * delta_time; // Recharge jump while on ground
+        playerJumpForce += 20 * delta_time;
     }
-
-
-    // Handle player jump logic
-    if (jumping && playerJumpForce > 0) {
-        velocityY = jumpVelocity;
-        playerJumpForce -= delta_time * 50;
-    }
-    if (playerJumpForce <= 0) {
-        playerJumpForce = 0; // No jump force remaining
-    }
-    if (playerJumpForce >= 100) {
-        playerJumpForce = 100; // Limit jump force
-    }
-
-
-    // Player Horizontal Movement
-    player_X += moveLR * delta_time * PLAYER_SPEED;
-
 
     int parallaxValue = delta_time * PLAYER_SPEED;
-    if (player_X > (float)WINDOW_WIDTH * (rightCam / 5)) {
+    if (player_X > (float)WINDOW_WIDTH * (rightCam/5)){
         background_img_src_rect.x += 100 * delta_time;
-        if (background_img_src_rect.x >= background_img_src_rect.w) {
+        if (background_img_src_rect.x >= background_img_src_rect.w)
             background_img_src_rect.x = 0;
-        }
-        player_X = (rightCam / 5) * (float)WINDOW_WIDTH; // Keep player within screen bounds
+        player_X = (rightCam/5) * (float)WINDOW_WIDTH;
         distanceTravelledByPlayerFromSpawn += delta_time * 100;
-
-        // Update entities for parallax:
-
-        for (BulletNode *current = bullets; current != NULL; current = current->next) {
-            current->bullet.x -= parallaxValue;
-        }
-        for (int i = 0; i < zombieCount; i++) {
+        for (int i = 0; i < zombieCount; i++)
             zombies[i].x -= parallaxValue;
-        }
-        for (int i = 0; i < platformsInScreen; i++) {
+        for (int i = 0; i < bulletCount; i++)
+            bullets[i].x -= parallaxValue;
+        for (int i = 0; i < platformsInScreen; i++)
             platforms[i].x -= parallaxValue;
-        }
-
-    } else if (player_X < (float)WINDOW_WIDTH * (leftCam / 5)) {
+    }
+    else if (player_X < (float)WINDOW_WIDTH * (leftCam/5)){
         background_img_src_rect.x -= 50 * delta_time;
-        if (background_img_src_rect.x <= 0) {
+        if (background_img_src_rect.x <= 0)
             background_img_src_rect.x = background_img_src_rect.w;
-        }
-        player_X = (leftCam / 5) * (float)WINDOW_WIDTH;  // Keep player within bounds.
+        player_X = (leftCam/5) * (float)WINDOW_WIDTH;
         distanceTravelledByPlayerFromSpawn -= delta_time * 100;
-
-        // Update entities for parallax:
-        for (BulletNode *current = bullets; current != NULL; current = current->next) {
-            current->bullet.x += parallaxValue;
-        }
-        for (int i = 0; i < zombieCount; i++) {
+        for (int i = 0; i < zombieCount; i++)
             zombies[i].x += parallaxValue;
-        }
-        for (int i = 0; i < platformsInScreen; i++) {
+        for (int i = 0; i < bulletCount; i++)
+            bullets[i].x += parallaxValue;
+        for (int i = 0; i < platformsInScreen; i++)
             platforms[i].x += parallaxValue;
-        }
     }
 
     // Healing Ability
@@ -891,115 +845,90 @@ void playerRender(void) {
 }
 
 void bulletData(int X, int Y, bool facingDirection) {
-    BulletNode *newBullet = malloc(sizeof(BulletNode));
-    if (newBullet == NULL) {
-        perror("Memory allocation failed"); // Improved error reporting
+    Bullet *newBullets = realloc(bullets, (bulletCount + 1) * sizeof(Bullet));
+    if (newBullets == NULL) {
+        printf("Memory allocation failed!\n");
         game_is_running = false;
         return;
     }
 
+    bullets = newBullets;
     if (facingDirection) {
-        newBullet->bullet.x = X + 47;
-        newBullet->bullet.direction = true;
+        bullets[bulletCount].x = X + 47; // Facing right
+        bullets[bulletCount].direction = true;
     } else {
-        newBullet->bullet.x = X - 7;
-        newBullet->bullet.direction = false;
+        bullets[bulletCount].x = X - 7; // Facing left
+        bullets[bulletCount].direction = false;
     }
-    newBullet->bullet.y = Y + ActualSpriteHeight + 22;
-
-    // Add the new bullet to the beginning of the linked list
-    newBullet->next = bullets;
-    bullets = newBullet;
+    bullets[bulletCount].y = (Y + ActualSpriteHeight + 22); // Set y-coordinate
+    bulletCount++;
 }
 
-void bulletRemove(BulletNode *bulletToRemove) {
-    if (bulletToRemove == bullets) {
-        bullets = bulletToRemove->next;
-    } else {
-        BulletNode *current = bullets;
-        while (current && current->next != bulletToRemove) {
-            current = current->next;
-        }
-        if (current) {
-            current->next = bulletToRemove->next;
-        }
+void bulletRemove(int *array, int size){
+    for (int i = 0; i < size; i++) {
+        int index = array[i] - i;
+        for (int j = index; j < bulletCount - 1; j++)
+            bullets[j] = bullets[j + 1];
     }
-    free(bulletToRemove);
+    bulletCount-=size;
 }
 
-void bulletCollisionSystem(void) {
-    BulletNode *current = bullets;
-    BulletNode *prev = NULL;
+void bulletCollisionSystem(void){
+    int totalremove = 0;
+    int *removeIndex = malloc(bulletCount * sizeof(int));
 
-    while (current != NULL) {
-        BulletNode *next = current->next;  // Store next before potentially freeing current
-        bool removeBullet = false;
+    for (int i = 0; i < bulletCount; i++){
+        // Check if the bullet is out of bounds
+        if (bullets[i].x < 0 || bullets[i].x > WINDOW_WIDTH){
+            removeIndex[totalremove++] = i;
+            continue;
+        }
 
-        if (current->bullet.x < 0 || current->bullet.x > WINDOW_WIDTH) {
-            removeBullet = true;
-        } else {
-            // Zombie collision check (using SDL_HasIntersection for efficiency)
-            for (int j = 0; j < zombieCount; j++) {
-                if (!zombies[j].dead) {
-                    SDL_Rect zombieRect = {(int)zombies[j].x, (int)zombies[j].y, 50, ActualSpriteHeight};
-                    SDL_Rect bulletRect = {(int)current->bullet.x, (int)current->bullet.y - 60, 10, 10};
-                    if (SDL_HasIntersection(&zombieRect, &bulletRect)) {
-                        zombies[j].health -= DAMAGE_BY_BULLET * (rand() % 2 + 1);  // Example damage
-                        if (zombies[j].health <= 0) {
-                            // Handle zombie death
-                        }
-                        removeBullet = true;
-                        break; // Exit inner loop after collision
-                    }
+        // Check collision with zombies
+        for (int j = 0; j < zombieCount; j++){
+            if (!zombies[j].dead)
+                if (collisionDetection((int)zombies[j].x, (int)zombies[j].y, 50, (int)ActualSpriteHeight, (int)bullets[i].x, (int)bullets[i].y - 60, 10, 10)){
+                    if (zombies[j].direction == 1)
+                        zombies[j].x += rand() % 5;
+                    else
+                        zombies[j].x -= rand() % 5;
+                    removeIndex[totalremove++] = i;
+                    int damage = DAMAGE_BY_BULLET * (rand() % 2 + 1);
+                    zombies[j].health -= damage;
+                    // if (damage > DAMAGE_BY_BULLET) // future, add headshot to head
+                    //     zombies[j].dead = true;
+                    break;
                 }
-            }
         }
-
-
-
-        if (removeBullet) {
-            if (prev) {
-                prev->next = next;
-            } else {
-                bullets = next;
-            }
-            free(current);
-        } else {
-           prev = current; 
-        }
-        current = next;
     }
-}
 
+    bulletRemove(removeIndex, totalremove);
+    free(removeIndex);  // Free the remove index array
+    removeIndex = NULL;
+}
 
 
 void bulletRender(void){
-    bulletCollisionSystem();
-
+    bulletCollisionSystem(); // Called properly
     SDL_Rect src_rect ={0, 0, 900, 450};
     SDL_RendererFlip flip = SDL_FLIP_NONE;
     SDL_Rect dstRect = {0, 0, 10, 5};
-
-    // MODIFIED: Iterate through the linked list to render bullets
-    for (BulletNode *current = bullets; current != NULL; current = current->next) {
-        if (current->bullet.direction) {
-            current->bullet.x += delta_time * bulletVelocity;
-        } else {
-            current->bullet.x -= delta_time * bulletVelocity;
+    for (int i = 0; i < bulletCount; i++){
+        if (bullets[i].direction)
+            bullets[i].x += delta_time * bulletVelocity;
+        else{
+            bullets[i].x -= delta_time * bulletVelocity;
             flip = SDL_FLIP_HORIZONTAL;
         }
-
-        dstRect.x = (int)current->bullet.x;
-        dstRect.y = (int)current->bullet.y + 3;
-
-
+        dstRect.x = bullets[i].x;
+        dstRect.y = bullets[i].y + 3;
         if (debug){
             SDL_SetRenderDrawColor(Renderer, 255, 0, 0, 255);
             SDL_RenderDrawRect(Renderer,&dstRect);
         }
         SDL_RenderCopyEx(Renderer, BulletTexture, &src_rect, &dstRect, 0, NULL, flip);
     }
-}
+};
 
 void gameOver(void){
     font = TTF_OpenFont("./textFont/AmaticSC-Regular.ttf", 40);
@@ -1275,7 +1204,10 @@ int collisionDetection(int x1, int y1, int width1, int height1, int x2, int y2, 
 
 // Function to clear all the things the game has started
 void DestroyWindowInternal(void){
-
+    free(bullets);
+    free(zombies);
+    bullets = NULL;
+    zombies = NULL;
 
     SDL_DestroyTexture(BackgroundTexture);
 
@@ -1295,24 +1227,9 @@ void DestroyWindowInternal(void){
     SDL_DestroyTexture(ResumeButtonTexture);
     SDL_DestroyTexture(ExitGameButtonTexture);
 
-    BulletNode *currentBullet = bullets;
-    while (currentBullet != NULL) {
-        BulletNode *nextBullet = currentBullet->next;
-        free(currentBullet);
-        currentBullet = nextBullet;
-    }
-    bullets = NULL;
-
-    // Free platforms:
-    free(platforms);
-    platforms = NULL;
-    platformsInScreen = 0; // Reset platform count
-    free(zombies);
-    zombies = NULL;
-    zombieCount = 0;
-
     SDL_DestroyRenderer(Renderer);
     SDL_DestroyWindow(Window);
+
     IMG_Quit();
     TTF_Quit();
     SDL_Quit();
