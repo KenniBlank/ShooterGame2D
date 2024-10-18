@@ -42,6 +42,7 @@ bool gameIsOver = false;
 float lastTimeOfPlayerOnGround = 0;
 bool followPlayer = false;
 bool playerOnPlatform = false;
+bool goDown = false;
 
 int mouseX, mouseY;
 int totalBulletInInventory = 200;
@@ -387,6 +388,10 @@ void ProcessInput(void){
                             if (playerJumpForce > 0 && playerJumpForce > 20)
                                 jumping = true;
                             break;
+                        case SDLK_s:
+                        case SDLK_DOWN:
+                            goDown = true;
+                            break;
                         case SDLK_f:
                             shoot = true;
                             break;
@@ -409,6 +414,10 @@ void ProcessInput(void){
                     case SDLK_SPACE:
                         jumping = false;
                         break;
+                    case SDLK_s:
+                    case SDLK_DOWN:
+                            goDown = false;
+                            break;
                     case SDLK_f:
                         shoot = false;
                         break;
@@ -616,42 +625,41 @@ void Render(void){
 }
 
 void platformSpawnLogic(int no_of_platforms) {
-    if (platformsInScreen > 5)
+    if (platformsInScreen >= 5)
         return; // Prevent exceeding the limit
 
     if (platforms == NULL) {
         platforms = malloc(sizeof(Platform) * no_of_platforms);
         if (platforms == NULL) {
-            // Handle allocation failure
+            // TODO: Handle allocation failure
             return;
         }
     } else {
         Platform *new_platforms = realloc(platforms, sizeof(Platform) * (platformsInScreen + no_of_platforms));
         if (new_platforms == NULL) {
-            // Handle allocation failure
-            return; // Keep the original pointer
+            // TODO: Handle allocation failure
+            return;
         }
         platforms = new_platforms;
     }
 
     // Spawn each platform
+    // distanceTravelledByPlayerFromSpawn; this is the variable on basis of which the generation must take place
     for (int i = 0; i < no_of_platforms && platformsInScreen < 5; i++) {
-        platforms[platformsInScreen].x = distanceTravelledByPlayerFromSpawn + rand() % 2 == 1? i * 500: -i * 500;
-        platforms[platformsInScreen].y = (int)(WINDOW_WIDTH/4) + (rand() % 50 + 50);
-        platforms[platformsInScreen].width = 100 + (rand() % 50 * -1);
-        platforms[platformsInScreen].height = (int)(WINDOW_HEIGHT/40) + (rand() % WINDOW_HEIGHT/60 * -1) + 10;
-        if (platforms[platformsInScreen].height >= 50){
+        platforms[platformsInScreen].y = (int)(WINDOW_WIDTH / 4) + (rand() % 50 + 70);
+        platforms[platformsInScreen].width = 50 + (rand() % 100);
+        platforms[platformsInScreen].x =  2 * rand() % 2 == 0 ? platformsInScreen * platforms[platformsInScreen].width: -1 * platformsInScreen * platforms[platformsInScreen].width;
+        platforms[platformsInScreen].height = (int)(WINDOW_HEIGHT / 40) + (rand() % WINDOW_HEIGHT / 60 * -1) + 10;
+        if (platforms[platformsInScreen].height >= 50)
             platforms[platformsInScreen].height = 50;
-        }
         platformsInScreen++;
     }
 }
 
+
 bool isRectOnTop(SDL_Rect playerRect, SDL_Rect dst_rect) {
     return (playerRect.y + playerRect.h <= (dst_rect.y+5) && playerRect.y + playerRect.h >= (dst_rect.y - 5) && playerRect.x < dst_rect.x + dst_rect.w && playerRect.x + playerRect.w > dst_rect.x);
 }
-
-
 
 void platformRemove(int size, int arr[]){
     for (int i = 0; i < size; i++) {
@@ -674,7 +682,7 @@ void platformRender(void) {
 
     for (int i = 0; i < platformsInScreen; i++) {
         SDL_Rect dst_rect = {platforms[i].x, platforms[i].y, platforms[i].width, platforms[i].height};
-        if (isRectOnTop(playerRect, dst_rect) && (!jumping || playerJumpForce <= 10)){
+        if (isRectOnTop(playerRect, dst_rect) && (!jumping || playerJumpForce <= 10) && !goDown){
             player_Y = platforms[i].y - SPRITE_HEIGHT;
             velocityY = 0;
             playerOnPlatform = true;
@@ -694,7 +702,7 @@ void platformRender(void) {
         SDL_SetRenderDrawColor(Renderer, 49, 91, 43, 255);
         SDL_RenderFillRect(Renderer, &innerRect);
 
-        if (platforms[i].x > 2 * (WINDOW_WIDTH + platforms[i].width) || platforms[i].x < 2 * platforms[i].width){
+        if (dst_rect.x + dst_rect.w < 1.5 * (- platforms[i].width) || dst_rect.x > 1.5 * (WINDOW_WIDTH + platforms[i].width)){
             arr = realloc(arr, size * sizeof(int));
             if (arr == NULL) {
                 printf("Memory Allocation failed!");
@@ -704,8 +712,8 @@ void platformRender(void) {
             continue;
         }
     }
-    // if (size > 0)
-    //     platformRemove(size, arr);
+    if (size > 0)
+        platformRemove(size, arr);
     free(arr);
     arr = NULL;
 }
