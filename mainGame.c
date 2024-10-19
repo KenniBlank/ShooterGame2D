@@ -31,7 +31,6 @@ int last_frame_time = 0;
 float delta_time = 0.0f; // This is very important dont delete this ever.
 float player_X = 100;
 float player_Y = 0;
-int groundLevel = 0;
 int PLAYER_SPEED = 150;
 int spriteInSpriteSheet = 0;
 bool jumping;
@@ -74,11 +73,10 @@ unsigned short int bulletCount = 0;
 typedef struct{
     int width, height;
     float x, y;
-    bool moving;
-    float timer;
 } Platform;
-Platform *platforms = NULL;
-unsigned short int platformsInScreen = 0;
+
+int platformsRendered = 0;
+Platform platforms[MAX_PLATFORMS_TO_BE_RENDERED];
 
 
 int InitializeWindow(void);
@@ -88,6 +86,7 @@ void ProcessInput(void);
 void Update(void);
     void bulletData(int X, int Y, bool facingDirection);
 void Render(void);
+    void platformSpawn(int spawnAmount);
     void platformRender(void);
     void zombieRender(void);
     void playerRender(void);
@@ -101,12 +100,7 @@ bool gamePause = false;
 float pause_start_time_tick = 0;
 void Paused(void);
 
-#if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__)
-  #include <windows.h>
-  int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevIns, LPSTR lpszArgument, int iShow) {
-#else
-  int main(int argc, char *argv[]) {
-#endif
+int main(int argc, char *argv[]) {
     game_is_running = InitializeWindow();
     SetUp();
     // Game Loop
@@ -191,7 +185,7 @@ SDL_Rect background_img_dest_rect;
 TTF_Font* font = NULL;
 
 int SetUp(void){
-    srand(69); // for randomizing
+    srand(time(NULL)); // for randomizing
 
     // Sprite rendering:
     BackgroundTexture = IMG_LoadTexture(Renderer, "sprite/Background/1.png");
@@ -239,6 +233,9 @@ int SetUp(void){
     zombie_Y = WINDOW_HEIGHT - ground_height - SPRITE_HEIGHT;
     distanceTravelledByPlayerFromSpawn = 0;
     spawnZombies(1);
+    platformSpawn(5);
+    platformSpawn(5);
+
     return true;
 }
 
@@ -477,7 +474,7 @@ void Update(void) {
             zombies[i].x -= parallaxValue;
         for (int i = 0; i < bulletCount; i++)
             bullets[i].x -= parallaxValue;
-        for (int i = 0; i < platformsInScreen; i++)
+        for (int i = 0; i < platformsRendered; i++)
             platforms[i].x -= parallaxValue;
     }
     else if (player_X < (float)WINDOW_WIDTH * (leftCam/5)){
@@ -490,7 +487,7 @@ void Update(void) {
             zombies[i].x += parallaxValue;
         for (int i = 0; i < bulletCount; i++)
             bullets[i].x += parallaxValue;
-        for (int i = 0; i < platformsInScreen; i++)
+        for (int i = 0; i < platformsRendered; i++)
             platforms[i].x += parallaxValue;
     }
 
@@ -623,99 +620,76 @@ void Render(void){
         gameOver();
     SDL_RenderPresent(Renderer); // Show rendered frame to user.
 }
-
-void platformSpawnLogic(int no_of_platforms) {
-    if (platformsInScreen >= 5)
-        return; // Prevent exceeding the limit
-
-    if (platforms == NULL) {
-        platforms = malloc(sizeof(Platform) * no_of_platforms);
-        if (platforms == NULL) {
-            // TODO: Handle allocation failure
-            return;
-        }
-    } else {
-        Platform *new_platforms = realloc(platforms, sizeof(Platform) * (platformsInScreen + no_of_platforms));
-        if (new_platforms == NULL) {
-            // TODO: Handle allocation failure
-            return;
-        }
-        platforms = new_platforms;
-    }
-
-    // Spawn each platform
-    // distanceTravelledByPlayerFromSpawn; this is the variable on basis of which the generation must take place
-    for (int i = 0; i < no_of_platforms && platformsInScreen < 5; i++) {
-        platforms[platformsInScreen].y = (int)(WINDOW_WIDTH / 4) + (rand() % 50 + 70);
-        platforms[platformsInScreen].width = 50 + (rand() % 100);
-        platforms[platformsInScreen].x =  2 * rand() % 2 == 0 ? platformsInScreen * platforms[platformsInScreen].width: -1 * platformsInScreen * platforms[platformsInScreen].width;
-        platforms[platformsInScreen].height = (int)(WINDOW_HEIGHT / 40) + (rand() % WINDOW_HEIGHT / 60 * -1) + 10;
-        if (platforms[platformsInScreen].height >= 50)
-            platforms[platformsInScreen].height = 50;
-        platformsInScreen++;
-    }
-}
-
+int ActualSpriteHeight = 2 * (int)(SPRITE_HEIGHT / 5);
 
 bool isRectOnTop(SDL_Rect playerRect, SDL_Rect dst_rect) {
     return (playerRect.y + playerRect.h <= (dst_rect.y+5) && playerRect.y + playerRect.h >= (dst_rect.y - 5) && playerRect.x < dst_rect.x + dst_rect.w && playerRect.x + playerRect.w > dst_rect.x);
 }
 
-void platformRemove(int size, int arr[]){
-    for (int i = 0; i < size; i++) {
-        int index = arr[i] - i;
-        for (int j = index; j < platformsInScreen - 1; j++)
-            platforms[j] = platforms[j + 1];  // Shift the other array element one step left: Clever RIGHT!!!
+void platformSpawn(int spawnAmount) {
+    // Check if adding more platforms exceeds the limit
+    if (platformsRendered + spawnAmount > 10)
+        return;
+
+    float maxPlatformHeight = 2.0 / 4 * WINDOW_HEIGHT - ground_height;
+
+    // Spawn additional platforms
+    for (int i = platformsRendered; i < platformsRendered + spawnAmount; i++) {
+        platforms[i].width = 100 + rand() % 50;
+        platforms[i].y = maxPlatformHeight + rand() % (int)(WINDOW_HEIGHT / 2) - i * 10;
+
+        platforms[i].height = (WINDOW_HEIGHT - ground_height) - platforms[i].y;
+        if (rand() % 2 == 1)
+            platforms[i].x = platforms[i].width - 2 + (rand() % (int)(WINDOW_WIDTH / 2) + 100);
+        else
+            platforms[i].x = -1 * platforms[i].width - 2 + (rand() % (int)(WINDOW_WIDTH / 2) + 100);
     }
-    platformsInScreen -= size;
-};
+    platformsRendered += spawnAmount;
 
-int ActualSpriteHeight = 2 * (int)(SPRITE_HEIGHT / 5);
+    // sort
+    for (int i = 0; i < platformsRendered; i++){
+        for (int j = i + 1; j < platformsRendered; j++) {
+            if (platforms[i].y > platforms[j].y) {
+                Platform temp = platforms[i];
+                platforms[i] = platforms[j];
+                platforms[j] = temp;
+            }
+        }
+    }
+}
+
 void platformRender(void) {
-    // Set draw color for the platforms
-    SDL_SetRenderDrawColor(Renderer, 255, 0, 0, 255); // Set to red or desired color
-    platformSpawnLogic(5); // Spawn platforms: Will be updated soon
+    // const int renderMaxWindowLength = 8;
 
-    SDL_Rect playerRect = {player_X+13, player_Y, 25, SPRITE_HEIGHT};
-    int *arr = NULL;
-    int size = 0;
+    SDL_Rect playerRect = {player_X + 13, player_Y, 25, SPRITE_HEIGHT};
 
-    for (int i = 0; i < platformsInScreen; i++) {
+    for (int i = 0; i < platformsRendered; i++) {
         SDL_Rect dst_rect = {platforms[i].x, platforms[i].y, platforms[i].width, platforms[i].height};
-        if (isRectOnTop(playerRect, dst_rect) && (!jumping || playerJumpForce <= 10) && !goDown){
-            player_Y = platforms[i].y - SPRITE_HEIGHT;
+
+        // Check if the player is on top of the platform
+        if (isRectOnTop(playerRect, dst_rect) && (!jumping || playerJumpForce <= 10) && !goDown) {
+            player_Y = platforms[i].y - SPRITE_HEIGHT; // Place player on top of the platform
             velocityY = 0;
             playerOnPlatform = true;
-            lastTimeOfPlayerOnGround = SDL_GetTicks();
-            playerJumpForce += 20 * delta_time;
-            platforms[i].timer = SDL_GetTicks();
+            playerJumpForce += 20; // Jump force increment
         }
 
-        // Set the draw color to black (0, 0, 0) and fully transparent (0)
-        SDL_SetRenderDrawColor(Renderer, 0, 0, 0, 0);
+        // Platform
+        SDL_SetRenderDrawColor(Renderer, 0, 0, 0, 255); // Outer color (black)
+        SDL_RenderFillRect(Renderer, &dst_rect);
+        if (dst_rect.x != 0 && dst_rect.y != 0 && dst_rect.w != 0 && dst_rect.h != 0){
+            dst_rect.x += 2;
+            dst_rect.y += 2;
+            dst_rect.w -= 4;
+            dst_rect.h -= 2;
+        }
+        SDL_SetRenderDrawColor(Renderer, 190, 100, 56, 255);
         SDL_RenderFillRect(Renderer, &dst_rect);
 
-        // Create an inner rectangle, slightly smaller and adjusted for position
-        SDL_Rect innerRect = {dst_rect.x + 2, dst_rect.y + 2, dst_rect.w - 4, dst_rect.h - 4};
-
-        // Set the draw color to a shade of green (49, 91, 43) and fully opaque (255)
-        SDL_SetRenderDrawColor(Renderer, 49, 91, 43, 255);
-        SDL_RenderFillRect(Renderer, &innerRect);
-
-        if (dst_rect.x + dst_rect.w < 1.5 * (- platforms[i].width) || dst_rect.x > 1.5 * (WINDOW_WIDTH + platforms[i].width)){
-            arr = realloc(arr, size * sizeof(int));
-            if (arr == NULL) {
-                printf("Memory Allocation failed!");
-                game_is_running = false;
-            }
-            arr[size++] = i;
-            continue;
-        }
+        dst_rect.h = 20;
+        SDL_SetRenderDrawColor(Renderer, 49, 91, 43, 255); // Inner color (green)
+        SDL_RenderFillRect(Renderer, &dst_rect);
     }
-    if (size > 0)
-        platformRemove(size, arr);
-    free(arr);
-    arr = NULL;
 }
 
 
@@ -757,6 +731,7 @@ void playerRender(void) {
         return;
     }
 
+    playerOnPlatform = true;
     if (player_Y < (WINDOW_HEIGHT - ground_height - SPRITE_HEIGHT)) {
         spriteInSpriteSheet = 7;  //frames in jump animation
         n = -8;
@@ -768,6 +743,7 @@ void playerRender(void) {
         else
             current_frame = 4;  // Keep 4th sprite in jump sheet
         player_X += moveLR * delta_time * PLAYER_SPEED;
+        playerOnPlatform = false;
     }
     else if (moveLR && !shoot && player_Y == (WINDOW_HEIGHT - ground_height - SPRITE_HEIGHT)){
         spriteInSpriteSheet = 8;
@@ -821,7 +797,7 @@ void playerRender(void) {
     }
 
     // Only allow the jump animation while in the air
-    if (jumping)
+    if (jumping || (!playerOnPlatform && shoot))
         SDL_RenderCopyEx(Renderer, PlayerJumpTexture, &src_rect, &dst_rect, 0, NULL, flip);
     else if (moveLR && !shoot)
         SDL_RenderCopyEx(Renderer, PlayerRunTexture, &src_rect, &dst_rect, 0, NULL, flip);
