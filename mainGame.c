@@ -100,7 +100,12 @@ bool gamePause = false;
 float pause_start_time_tick = 0;
 void Paused(void);
 
-int main(int argc, char *argv[]) {
+#if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__)
+  #include <windows.h>
+  int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevIns, LPSTR lpszArgument, int iShow) {
+#else
+  int main(int argc, char *argv[]) {
+#endif
     game_is_running = InitializeWindow();
     SetUp();
     // Game Loop
@@ -185,7 +190,7 @@ SDL_Rect background_img_dest_rect;
 TTF_Font* font = NULL;
 
 int SetUp(void){
-    srand(time(NULL)); // for randomizing
+    srand(609); // for randomizing
 
     // Sprite rendering:
     BackgroundTexture = IMG_LoadTexture(Renderer, "sprite/Background/1.png");
