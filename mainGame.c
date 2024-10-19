@@ -190,8 +190,7 @@ SDL_Rect background_img_dest_rect;
 TTF_Font* font = NULL;
 
 int SetUp(void){
-    srand(609); // for randomizing
-
+    srand(1007); // for randomizing
     // Sprite rendering:
     BackgroundTexture = IMG_LoadTexture(Renderer, "sprite/Background/1.png");
 
@@ -713,6 +712,7 @@ void playerRender(void) {
     // If the direction is left, flip the sprite horizontally
     if (playerDirection == -1)
         flip = SDL_FLIP_HORIZONTAL;
+
     if (playerDead){
         spriteInSpriteSheet = 4;
         if (current_frame > spriteInSpriteSheet){
@@ -736,21 +736,20 @@ void playerRender(void) {
         return;
     }
 
-    playerOnPlatform = true;
-    if (player_Y < (WINDOW_HEIGHT - ground_height - SPRITE_HEIGHT)) {
+    if (jumping || !playerOnPlatform) {
         spriteInSpriteSheet = 7;  //frames in jump animation
         n = -8;
         mulFactor = 0.25;
 
         // finish the jump animation
+        // TODO: with implementation of platform, need another method for finishing this animation
         if (player_Y >= WINDOW_HEIGHT - ground_height - SPRITE_HEIGHT - 10)
             current_frame = (current_frame + 1) % spriteInSpriteSheet;
         else
             current_frame = 4;  // Keep 4th sprite in jump sheet
         player_X += moveLR * delta_time * PLAYER_SPEED;
-        playerOnPlatform = false;
     }
-    else if (moveLR && !shoot && player_Y == (WINDOW_HEIGHT - ground_height - SPRITE_HEIGHT)){
+    else if (moveLR && !shoot && playerOnPlatform){
         spriteInSpriteSheet = 8;
         n = -8;
         mulFactor = 1.5;
