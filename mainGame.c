@@ -453,10 +453,12 @@ void Update(void) {
     last_frame_time = SDL_GetTicks();
 
     velocityY += gravity * delta_time;
-    // Setting a limit to zet
+
+    // Setting a limit to player zet
     if (player_Y <= (-SPRITE_HEIGHT)){
         player_Y = -SPRITE_HEIGHT;
     }
+
     player_Y += velocityY * delta_time;
     if (player_Y >= WINDOW_HEIGHT - ground_height - SPRITE_HEIGHT) {
         player_Y = WINDOW_HEIGHT - ground_height - SPRITE_HEIGHT;
@@ -464,8 +466,10 @@ void Update(void) {
         playerOnPlatform = true;
         followPlayer = true;
         lastTimeOfPlayerOnGround = SDL_GetTicks();
-        playerJumpForce += 20 * delta_time;
     }
+
+    if (playerOnPlatform)
+        playerJumpForce += 20 * delta_time;
 
     int parallaxValue = delta_time * PLAYER_SPEED;
     if (player_X > (float)WINDOW_WIDTH * (rightCam/5)){
@@ -675,7 +679,6 @@ void platformRender(void) {
             player_Y = platforms[i].y - SPRITE_HEIGHT; // Place player on top of the platform
             velocityY = 0;
             playerOnPlatform = true;
-            playerJumpForce += 20; // Jump force increment
         }
 
         // Platform
@@ -748,6 +751,7 @@ void playerRender(void) {
         else
             current_frame = 4;  // Keep 4th sprite in jump sheet
         player_X += moveLR * delta_time * PLAYER_SPEED;
+        playerOnPlatform = false;
     }
     else if (moveLR && !shoot && playerOnPlatform){
         spriteInSpriteSheet = 8;
@@ -994,7 +998,6 @@ int attackPlayer = false;
 int spriteChangeRate = 0;
 float zombieHealth = 100.0f;
 int zombieIdle = false;
-SDL_Rect srcRect = {0, 0, 50, SPRITE_HEIGHT};
 
 
 int temp = 0;
@@ -1019,9 +1022,8 @@ void zombieRender(void) {
     int size = 0;
 
     for (int z = 0; z < zombieCount; z++){
-        srcRect.w = 50;
-        srcRect.h = SPRITE_HEIGHT;
         Zombie *zombie = &zombies[z];  // Pointer to current zombie
+        SDL_Rect srcRect = {zombie->x, 0, 50, SPRITE_HEIGHT};
 
         // Render zombie health bar
         if (!zombie->dead)
@@ -1039,6 +1041,7 @@ void zombieRender(void) {
             if (zombie->current_frame == 5){
                 arr = realloc(arr, size * sizeof(int));
                 if (arr == NULL) {
+                    // TODO: Handle Case
                     printf("Memory Allocation failed!");
                     game_is_running = false;
                 }
@@ -1068,8 +1071,9 @@ void zombieRender(void) {
 
         SDL_Rect dstRect = {
             zombie->x,
-            WINDOW_HEIGHT - ground_height - SPRITE_HEIGHT,
-            srcRect.w, SPRITE_HEIGHT
+            zombie->y,
+            srcRect.w,
+            srcRect.h
         };
 
         if (abs(dist_To_player) <= 25 && (player_Y - zombie->y >= -40) && !zombie->dead && !playerDead){
@@ -1114,6 +1118,11 @@ void zombieRender(void) {
 
         flip = (dist_To_player < 0) ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE;
         zombie->direction = (dist_To_player < 0) ? 1: -1;
+
+        // gravity
+        zombie->y += gravity * delta_time;
+        if (zombie->y >= WINDOW_HEIGHT - ground_height - SPRITE_HEIGHT)
+            zombie->y = WINDOW_HEIGHT - ground_height - SPRITE_HEIGHT;
 
         // ZombieSprite
         if (zombie->dead)
