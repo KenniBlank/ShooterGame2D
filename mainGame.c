@@ -27,36 +27,25 @@ SDL_Window* Window = NULL;
 SDL_Renderer* Renderer = NULL;
 
 bool game_is_running = false;
+bool gameIsOver = false;
 int last_frame_time = 0;
 float delta_time = 0.0f; // This is very important dont delete this ever.
-float player_X = 100;
-float player_Y = 0;
-int PLAYER_SPEED = 150;
-int spriteInSpriteSheet = 0;
-bool jumping;
-float playerHealth = 100.0;
-float playerJumpForce = 100.0;
-bool playerDead = false;
-bool gameIsOver = false;
-bool playerOnPlatform = false;
-bool goDown = false;
+
+typedef struct{
+    bool jumping, goDown, dead, onPlatform, shoot;
+    float x, y, jumpForce, health, jumpVelocity, shooting_last_frame;
+    short int speed, spriteInSpriteSheet, moveLR, current_frame, playerDirection;
+} Player;
+Player player;
 
 int mouseX, mouseY;
 int totalBulletInInventory = 200;
 double distanceTravelledByPlayerFromSpawn = 0;
 
-float zombie_Y;
 typedef struct {
-    int x, y;           // Position
-    int health;         // Health
-    int current_frame;    // Animation frame
-    int direction;        // Direction (1 for right, -1 for left)
-    bool attackPlayer;     // If zombie is attacking the player
-    bool idle;             // If zombie is idle
-    double last_frame_time;
-    bool dead;
-    bool onPlatform;
-    float velocityYZombie;
+    short int health, current_frame, direction;
+    float x, y, last_frame_time, velocityYZombie, last_frame_time_for_jump;
+    bool attackPlayer, idle, dead, onPlatform, playerReachable;
 } Zombie;
 int zombieCount = 0;
 int zombieKilled = 0;
@@ -191,6 +180,24 @@ TTF_Font* font = NULL;
 
 int SetUp(void){
     srand(1007); // for fixed randomizing
+
+    // Player Setup
+    player.x = 100;
+    player.speed = 150;
+    player.spriteInSpriteSheet = 0;
+    player.jumping = false;
+    player.health = 100.0;
+    player.jumpForce = 100.0;
+    player.dead = false;
+    player.onPlatform = false;
+    player.goDown = false;
+    player.moveLR = 0;
+    player.shoot = false;
+    player.jumpVelocity = -200.0f;
+    player.current_frame = 0;
+    player.playerDirection = 1;
+    player.shooting_last_frame = 0;
+
     // Sprite rendering:
     BackgroundTexture = IMG_LoadTexture(Renderer, "sprite/Background/1.png");
 
@@ -233,12 +240,10 @@ int SetUp(void){
     background_img_dest_rect.w = WINDOW_WIDTH;
     background_img_dest_rect.h = WINDOW_HEIGHT - ground_height;
 
-    player_Y = WINDOW_HEIGHT - ground_height - SPRITE_HEIGHT;
-    zombie_Y = WINDOW_HEIGHT - ground_height - SPRITE_HEIGHT;
+    player.y = WINDOW_HEIGHT - ground_height - SPRITE_HEIGHT;
     distanceTravelledByPlayerFromSpawn = 0;
     spawnZombies(1);
-    platformSpawn(1);
-
+    platformSpawn(10);
     return true;
 }
 
@@ -252,7 +257,7 @@ void spawnZombies(int numberOfZombies) {
     // Spawn each zombie
     for (int i = 0; i < numberOfZombies; i++) {
         factor = (rand() % 2 == 0) ? -1 : 1;
-        float value = player_X + factor * (rand() % 100 + (float)WINDOW_WIDTH / 2);
+        float value = player.x + factor * (rand() % 100 + (float)WINDOW_WIDTH / 2);
 
         // Clamp the value to be within valid screen bounds
         if (value < -((float)WINDOW_WIDTH / 5))
@@ -270,6 +275,7 @@ void spawnZombies(int numberOfZombies) {
         zombies[zombieCount].idle = true;
         zombies[zombieCount].last_frame_time = SDL_GetTicks();
         zombies[zombieCount].dead = false;
+        zombies[zombieCount].last_frame_time_for_jump = SDL_GetTicks();
         zombieCount++;
     }
 }
@@ -334,8 +340,6 @@ void Paused(void) {
 }
 
 // Function to process keyboard input
-short int moveLR = 0;
-bool shoot = false;
 bool debug = false;
 void ProcessInput(void){
     SDL_Event event;
@@ -373,27 +377,27 @@ void ProcessInput(void){
                             SDL_ShowCursor(SDL_DISABLE);
                         }
                         break;
-                    if (!playerDead){
+                    if (!player.dead){
                         case SDLK_a:
                         case SDLK_LEFT:
-                            moveLR = -1;
+                            player.moveLR = -1;
                             break;
                         case SDLK_d:
                         case SDLK_RIGHT:
-                            moveLR = 1;
+                            player.moveLR = 1;
                             break;
                         case SDLK_w:
                         case SDLK_UP:
                         case SDLK_SPACE:
-                            if (playerJumpForce > 0 && playerJumpForce > 20)
-                                jumping = true;
+                            if (player.jumpForce > 20)
+                                player.jumping = true;
                             break;
                         case SDLK_s:
                         case SDLK_DOWN:
-                            goDown = true;
+                            player.goDown = true;
                             break;
                         case SDLK_f:
-                            shoot = true;
+                            player.shoot = true;
                             break;
                         case SDLK_k:
                             debug = !debug;
@@ -407,19 +411,19 @@ void ProcessInput(void){
                     case SDLK_LEFT:
                     case SDLK_d:
                     case SDLK_RIGHT:
-                        moveLR = 0;
+                        player.moveLR = 0;
                         break;
                     case SDLK_w:
                     case SDLK_UP:
                     case SDLK_SPACE:
-                        jumping = false;
+                        player.jumping = false;
                         break;
                     case SDLK_s:
                     case SDLK_DOWN:
-                            goDown = false;
+                            player.goDown = false;
                             break;
                     case SDLK_f:
-                        shoot = false;
+                        player.shoot = false;
                         break;
                 }
                 break;
@@ -430,7 +434,6 @@ void ProcessInput(void){
 }
 
 // Function to Update Game Objects Per Frame
-float jumpVelocity = -200.0f;
 float velocityY = 0.0f;
 float gravity = 980.0f; // 9.8m/s is earth's gravity i think
 float_t zombie_frame_time = 0;
@@ -441,7 +444,7 @@ int indexOfNearestPlatform(int x, int y){
     int distanceToPlatform[platformsRendered];
     int minDistance = WINDOW_WIDTH;
     int index;
-    for (int i = 0; i < platformsRendered; i++) {
+    for (int i = 0; i <= platformsRendered; i++) {
         distanceToPlatform[i] = pow(pow(x - platforms[i].x, 2) + pow(y - platforms[i].y, 2), 0.5);
         if (distanceToPlatform[i] < minDistance){
             minDistance = distanceToPlatform[i];
@@ -468,45 +471,58 @@ void Update(void) {
     last_frame_time = SDL_GetTicks();
 
     for (int i = 0; i < zombieCount; i++){
-        zombies[i].velocityYZombie = gravity * delta_time;
+        if (player.y - zombies[i].y >= -40)
+            zombies[i].playerReachable = true;
+        else
+            zombies[i].playerReachable = false;
+
         zombies[i].y += zombies[i].velocityYZombie;
+        zombies[i].velocityYZombie = gravity * delta_time;
         if (zombies[i].y > WINDOW_HEIGHT - ground_height - SPRITE_HEIGHT){
             zombies[i].y = WINDOW_HEIGHT - ground_height - SPRITE_HEIGHT;
             zombies[i].velocityYZombie = 0;
             zombies[i].onPlatform = true;
         }
-        if (!zombies[i].dead && !playerDead){
+        if (!zombies[i].dead && !player.dead && !zombies[i].playerReachable && player.onPlatform){
             int index = indexOfNearestPlatform(zombies[i].x, zombies[i].y);
             if (index == MAX_PLATFORMS_TO_BE_RENDERED + 1)
                 zombies[i].idle = true;
             else{
-                // TODO: Teleport to platform
-                zombies[i].idle = true;
+                // TODO: Teleport to platform: change animation to jumping
+                // printf("...\n Platform: %f, Zombie: %d ...\n", platforms[index].y, zombies[i].y);
+                if (SDL_GetTicks() - zombies[i].last_frame_time_for_jump > 7000){ // can jump only once every 7 seconds
+                    zombies[i].y = platforms[index].y - SPRITE_HEIGHT;
+                    zombies[i].x = platforms[index].x + (int)(platforms[index].width / 2);
+                    zombies[i].idle = true;
+                    zombies[i].last_frame_time_for_jump = SDL_GetTicks();
+                }
             }
         }
     }
 
     // Setting a limit to player zet max reach
-    if (player_Y <= (-SPRITE_HEIGHT))
-        player_Y = -SPRITE_HEIGHT;
+    if (player.y <= (-SPRITE_HEIGHT))
+        player.y = -SPRITE_HEIGHT;
 
     velocityY += gravity * delta_time;
-    player_Y += velocityY * delta_time;
-    if (player_Y > WINDOW_HEIGHT - ground_height - SPRITE_HEIGHT) {
-        player_Y = WINDOW_HEIGHT - ground_height - SPRITE_HEIGHT;
+    if (gamePause)
         velocityY = 0;
-        playerOnPlatform = true;
+    player.y += velocityY * delta_time;
+    if (player.y > WINDOW_HEIGHT - ground_height - SPRITE_HEIGHT) {
+        player.y = WINDOW_HEIGHT - ground_height - SPRITE_HEIGHT;
+        velocityY = 0;
+        player.onPlatform = true;
     }
 
-    if (playerOnPlatform)
-        playerJumpForce += 20 * delta_time;
+    if (player.onPlatform)
+        player.jumpForce += 20 * delta_time;
 
-    int parallaxValue = delta_time * PLAYER_SPEED;
-    if (player_X > (float)WINDOW_WIDTH * (rightCam/5)){
+    int parallaxValue = delta_time * player.speed;
+    if (player.x > (float)WINDOW_WIDTH * (rightCam/5)){
         background_img_src_rect.x += 100 * delta_time;
         if (background_img_src_rect.x >= background_img_src_rect.w)
             background_img_src_rect.x = 0;
-        player_X = (rightCam/5) * (float)WINDOW_WIDTH;
+        player.x = (rightCam/5) * (float)WINDOW_WIDTH;
         distanceTravelledByPlayerFromSpawn += delta_time * 100;
         for (int i = 0; i < zombieCount; i++)
             zombies[i].x -= parallaxValue;
@@ -515,11 +531,11 @@ void Update(void) {
         for (int i = 0; i < platformsRendered; i++)
             platforms[i].x -= parallaxValue;
     }
-    else if (player_X < (float)WINDOW_WIDTH * (leftCam/5)){
+    else if (player.x < (float)WINDOW_WIDTH * (leftCam/5)){
         background_img_src_rect.x -= 50 * delta_time;
         if (background_img_src_rect.x <= 0)
             background_img_src_rect.x = background_img_src_rect.w;
-        player_X = (leftCam/5) * (float)WINDOW_WIDTH;
+        player.x = (leftCam/5) * (float)WINDOW_WIDTH;
         distanceTravelledByPlayerFromSpawn -= delta_time * 100;
         for (int i = 0; i < zombieCount; i++)
             zombies[i].x += parallaxValue;
@@ -530,20 +546,20 @@ void Update(void) {
     }
 
     // Healing
-    playerHealth += delta_time;
-    if (playerHealth > 100)
-        playerHealth = 100;
-
-    if (zombie_Y >= WINDOW_HEIGHT - ground_height - SPRITE_HEIGHT)
-        zombie_Y = WINDOW_HEIGHT - ground_height - SPRITE_HEIGHT;
-    if (jumping && playerJumpForce > 0){
-        velocityY = jumpVelocity;
-        playerJumpForce -= delta_time * 50;
+    player.health += delta_time;
+    if (player.health > 100)
+        player.health = 100;
+    if (player.jumping && player.jumpForce > 0){
+        velocityY = player.jumpVelocity;
+        player.jumpForce -= delta_time * 50;
     }
-    if (playerJumpForce <= 0)
-        playerJumpForce = 0;
-    if (playerJumpForce >= 100)
-        playerJumpForce = 100;
+    if (player.jumpForce < 5)
+        player.jumping = false;
+
+    if (player.jumpForce <= 0)
+        player.jumpForce = 0;
+    if (player.jumpForce >= 100)
+        player.jumpForce = 100;
 }
 
 void spawnMainBoss(void){
@@ -622,10 +638,13 @@ float mulFactor = 1;
 // Function to render game objects in the scene
 void Render(void){
     // Background Color
-    SDL_SetRenderDrawColor(Renderer, 211, 211, 211, 1);
+    SDL_SetRenderDrawColor(Renderer, 211, 211, 211, 255);
     SDL_RenderClear(Renderer);
 
     SDL_RenderCopy(Renderer, BackgroundTexture, &background_img_src_rect, &background_img_dest_rect); //Background Image
+
+    // Spawn Platforms for player to jump into
+    platformRender();
 
     // Draw ground
     SDL_Rect ground_rect = {
@@ -636,12 +655,14 @@ void Render(void){
     };
     SDL_SetRenderDrawColor(Renderer, 49, 91, 43, 255);
     SDL_RenderFillRect(Renderer, &ground_rect);
-    SDL_SetRenderDrawColor(Renderer, 0, 0, 0, 0);
     ground_rect.h = 2;
+    SDL_SetRenderDrawColor(Renderer, 0, 0, 0, 0);
     SDL_RenderFillRect(Renderer, &ground_rect);
-
-    // Spawn Platforms for player to jump into
-    platformRender();
+    // TODO: Find a color that covers below ground grass
+    // ground_rect.h = ground_height;
+    // ground_rect.y = WINDOW_HEIGHT - ground_height + 25;
+    // SDL_SetRenderDrawColor(Renderer, 125, 25, 69, 5);
+    // SDL_RenderFillRect(Renderer, &ground_rect);
 
     // Sprite Animation:
     zombieRender();
@@ -657,13 +678,13 @@ void Render(void){
 }
 int ActualSpriteHeightStartY = 2 * (int)(SPRITE_HEIGHT / 5);
 
-bool isRectOnTop(SDL_Rect playerRect, SDL_Rect dst_rect) {
-    return (playerRect.y + playerRect.h <= (dst_rect.y+5) && playerRect.y + playerRect.h >= (dst_rect.y - 5) && playerRect.x < dst_rect.x + dst_rect.w && playerRect.x + playerRect.w > dst_rect.x);
+bool isRectOnTop(SDL_Rect Rect, SDL_Rect dst_rect) {
+    return (Rect.y + Rect.h <= (dst_rect.y+3) && Rect.y + Rect.h >= (dst_rect.y - 3) && Rect.x < dst_rect.x + dst_rect.w && Rect.x + Rect.w > dst_rect.x);
 }
 
 void platformSpawn(int spawnAmount) {
     // Check if adding more platforms exceeds the limit
-    if (platformsRendered + spawnAmount > 10)
+    if (platformsRendered + spawnAmount > 100)
         return;
 
     float maxPlatformHeight = 2.0 / 4 * WINDOW_HEIGHT - ground_height;
@@ -694,19 +715,18 @@ void platformSpawn(int spawnAmount) {
 }
 
 void platformRender(void) {
-    // const int renderMaxWindowLength = 8;
+    // const int renderMaxWindowLength = +- 7;
 
-    SDL_Rect playerRect = {player_X + 13, player_Y, 25, SPRITE_HEIGHT};
+    SDL_Rect playerRect = {player.x + 13, player.y, 25, SPRITE_HEIGHT};
 
     for (int i = 0; i < platformsRendered; i++) {
         SDL_Rect dst_rect = {platforms[i].x, platforms[i].y, platforms[i].width, platforms[i].height};
 
         // Check if the player is on top of the platform
-        if (isRectOnTop(playerRect, dst_rect) && (!jumping || playerJumpForce <= 10) && !goDown) {
-            player_Y = platforms[i].y - SPRITE_HEIGHT; // Place player on top of the platform
+        if (isRectOnTop(playerRect, dst_rect) && (!player.jumping || player.jumpForce <= 10) && !player.goDown) {
+            player.y = platforms[i].y - SPRITE_HEIGHT; // Place player on top of the platform
             velocityY = 0;
-            playerOnPlatform = true;
-            velocityY = 0;
+            player.onPlatform = true;
         }
 
         // check if zombie on top of platform
@@ -715,6 +735,7 @@ void platformRender(void) {
             if (isRectOnTop(zombieRect, dst_rect)) {
                 zombies[j].y = platforms[i].y - SPRITE_HEIGHT;
                 zombies[j].onPlatform = true;
+                zombies[j].velocityYZombie = 0;
             }
         }
 
@@ -736,83 +757,79 @@ void platformRender(void) {
     }
 }
 
-
-int current_frame = 0;
-int playerDirection = 1;
-float shooting_last_frame = 0;
 void playerRender(void) {
     SDL_RendererFlip flip = SDL_FLIP_NONE;  // No flip by default
 
     // Update playerDirection
-    if (moveLR > 0)
-        playerDirection = 1;  // Moving right
-    else if (moveLR < 0)
-        playerDirection = -1; // Moving left
+    if (player.moveLR > 0)
+        player.playerDirection = 1;  // Moving right
+    else if (player.moveLR < 0)
+        player.playerDirection = -1; // Moving left
 
     // If the direction is left, flip the sprite horizontally
-    if (playerDirection == -1)
+    if (player.playerDirection == -1)
         flip = SDL_FLIP_HORIZONTAL;
 
-    if (playerDead){
-        spriteInSpriteSheet = 4;
-        if (current_frame > spriteInSpriteSheet){
+    if (player.dead){
+        player.spriteInSpriteSheet = 4;
+        if (player.current_frame > player.spriteInSpriteSheet){
             SDL_Delay(1000);
             gameIsOver = true;
         }
         int dead[]= {25, 150, 280, 400, 560};
         mulFactor = 0.5;
         SDL_Rect src_rect = {
-            dead[current_frame],
+            dead[player.current_frame],
             0, 80, SPRITE_HEIGHT
         };
-        SDL_Rect dst_rect = {(int)player_X, (int)player_Y, src_rect.w, src_rect.h};
+        SDL_Rect dst_rect = {(int)player.x, (int)player.y, src_rect.w, src_rect.h};
 
         SDL_RenderCopyEx(Renderer, PlayerDeadTexture, &src_rect, &dst_rect, 0, NULL, flip);
 
-        if ((SDL_GetTicks() - last_frame_time_for_idle) > 1000 / (spriteInSpriteSheet * mulFactor)) {
-            current_frame = (current_frame + 1);
+        if ((SDL_GetTicks() - last_frame_time_for_idle) > 1000 / (player.spriteInSpriteSheet * mulFactor)) {
+            player.current_frame = (player.current_frame + 1);
             last_frame_time_for_idle = SDL_GetTicks();
         }
         return;
     }
 
-    if (jumping || !playerOnPlatform) {
-        spriteInSpriteSheet = 7;  //frames in jump animation
+    if (player.jumping || !player.onPlatform) {
+        player.spriteInSpriteSheet = 7;  //frames in jump animation
         n = -8;
         mulFactor = 0.25;
 
         // finish the jump animation
         // TODO: with implementation of platform, need another method for finishing this animation
-        if (player_Y >= WINDOW_HEIGHT - ground_height - SPRITE_HEIGHT - 10)
-            current_frame = (current_frame + 1) % spriteInSpriteSheet;
+        if (player.y >= WINDOW_HEIGHT - ground_height - SPRITE_HEIGHT - 10)
+            player.current_frame = (player.current_frame + 1) % player.spriteInSpriteSheet;
         else
-            current_frame = 4;  // Keep 4th sprite in jump sheet
-        player_X += moveLR * delta_time * PLAYER_SPEED;
-        playerOnPlatform = false;
+            player.current_frame = 4;  // Keep 4th sprite in jump sheet
+        player.x += player.moveLR * delta_time * player.speed;
+        player.onPlatform = false;
     }
-    else if (moveLR && !shoot && playerOnPlatform){
-        spriteInSpriteSheet = 8;
+    else if (player.moveLR && !player.shoot && player.onPlatform){
+        player.spriteInSpriteSheet = 8;
         n = -8;
         mulFactor = 1.5;
-        player_X += moveLR * delta_time * PLAYER_SPEED;
+        player.x += player.moveLR * delta_time * player.speed;
     }
-    else if (shoot) {
-        spriteInSpriteSheet = 4;  // frames in shooting animation
+    else if (player.shoot) {
+        player.spriteInSpriteSheet = 4;  // frames in shooting animation
         n = 0;
         mulFactor = 4;
     }
     else {
-        spriteInSpriteSheet = 8;  // Idle animation frames
+        player.spriteInSpriteSheet = 8;  // Idle animation frames
         n = -8;
         mulFactor = 1;
     }
 
     SDL_Rect src_rect = {
-        45 + n + addFactor * 2.98 * current_frame,
+        45 + n + addFactor * 2.98 * player.current_frame,
         0, 50, SPRITE_HEIGHT
     };
 
-    SDL_Rect dst_rect = {(int)player_X, (int)player_Y, src_rect.w, src_rect.h};
+    SDL_Rect dst_rect = {(int)player.x, (int)player.y, src_rect.w, src_rect.h};
 
     // Draw a red outline around the sprite (for debugging purposes)
     if (debug){
@@ -824,42 +841,42 @@ void playerRender(void) {
         dst_rect.y -= ActualSpriteHeightStartY;
     }
 
-    if (shoot && (SDL_GetTicks() - shooting_last_frame) > (120)){
+    if (player.shoot && (SDL_GetTicks() - player.shooting_last_frame) > (120)){
         if (totalBulletInInventory > 0){
-            if (src_rect.x != 45 + addFactor * 2.98 * current_frame){
+            if (src_rect.x != 45 + addFactor * 2.98 * player.current_frame){
                 if (flip == SDL_FLIP_NONE){
-                    bulletData(player_X, player_Y, true);
-                    player_X -= delta_time * (rand() % 10 + 20);
+                    bulletData(player.x, player.y, true);
+                    player.x -= delta_time * (rand() % 10 + 20);
                 }
                 else{
-                    bulletData(player_X, player_Y, false);
-                    player_X += delta_time * (rand() % 10 + 20);
+                    bulletData(player.x, player.y, false);
+                    player.x += delta_time * (rand() % 10 + 20);
                 }
-                shooting_last_frame = SDL_GetTicks();
+                player.shooting_last_frame = SDL_GetTicks();
                 totalBulletInInventory--;
             }
         }
     }
 
     // Only allow the jump animation while in the air
-    if (jumping || (!playerOnPlatform && shoot))
+    if (player.jumping || (!player.onPlatform && player.shoot))
         SDL_RenderCopyEx(Renderer, PlayerJumpTexture, &src_rect, &dst_rect, 0, NULL, flip);
-    else if (moveLR && !shoot)
+    else if (player.moveLR && !player.shoot)
         SDL_RenderCopyEx(Renderer, PlayerRunTexture, &src_rect, &dst_rect, 0, NULL, flip);
-    else if (shoot)
+    else if (player.shoot)
         SDL_RenderCopyEx(Renderer, PlayerShootTexture, &src_rect, &dst_rect, 0, NULL, flip);
     else
         SDL_RenderCopyEx(Renderer, PlayerIdleTexture, &src_rect, &dst_rect, 0, NULL, flip);
 
     // indipendent animation for player instead of bound my game FPS
-    if ((SDL_GetTicks() - last_frame_time_for_idle) > 1000 / (spriteInSpriteSheet * mulFactor)) {
-        current_frame = (current_frame + 1) % spriteInSpriteSheet;
+    if ((SDL_GetTicks() - last_frame_time_for_idle) > 1000 / (player.spriteInSpriteSheet * mulFactor)) {
+        player.current_frame = (player.current_frame + 1) % player.spriteInSpriteSheet;
         last_frame_time_for_idle = SDL_GetTicks();
     }
-    if (!playerDead){
-        if (!healthBar(player_X, player_Y, playerHealth, true)){
-            playerDead = true;
-            current_frame = 0;
+    if (!player.dead){
+        if (!healthBar(player.x, player.y, player.health, true)){
+            player.dead = true;
+            player.current_frame = 0;
         }
     }
 }
@@ -915,8 +932,6 @@ void bulletCollisionSystem(void){
                     removeIndex[totalremove++] = i;
                     int damage = DAMAGE_BY_BULLET * (rand() % 2 + 1);
                     zombies[j].health -= damage;
-                    // if (damage > DAMAGE_BY_BULLET) // future, add headshot to head
-                    //     zombies[j].dead = true;
                     break;
                 }
         }
@@ -1095,7 +1110,7 @@ void zombieRender(void) {
         }
 
         // Movement logic based on player's position
-        int dist_To_player = player_X - zombie->x;
+        int dist_To_player = player.x - zombie->x;
 
         SDL_Rect dstRect = {
             zombie->x,
@@ -1104,14 +1119,19 @@ void zombieRender(void) {
             srcRect.h
         };
 
-        if (abs(dist_To_player) <= 25 && (player_Y - zombie->y >= -40) && !zombie->dead && !playerDead){
-            if (collisionDetection(player_X, player_Y, 50, ActualSpriteHeightStartY, zombie->x, zombie->y, 50, ActualSpriteHeightStartY)) {
+        if (abs(dist_To_player) <= 25 && zombie->playerReachable && !zombie->dead && !player.dead){
+            if (collisionDetection(player.x, player.y, 50, ActualSpriteHeightStartY, zombie->x, zombie->y, 50, ActualSpriteHeightStartY)) {
                 zombie->idle = false;
                 zombie->attackPlayer = true;
-                if (zombie->current_frame >= 4)
+                if (zombie->current_frame >= 4){
                     zombie->current_frame = 0;
+                    zombie->attackPlayer = false;
+                }
             }
-        } else if (abs(dist_To_player) > 25 && abs(dist_To_player) < (WINDOW_WIDTH - 10) && !zombie->dead && !playerDead) {
+            else{
+               zombie->attackPlayer = false;
+            }
+        } else if (abs(dist_To_player) > 25 && abs(dist_To_player) < (WINDOW_WIDTH - 10) && !zombie->dead && !player.dead) {
             zombie->attackPlayer = false;
             zombie->idle = false;
             int resultOfRandom = rand() % 100 + 50;
@@ -1122,15 +1142,15 @@ void zombieRender(void) {
                 zombie->x += movementSpeed * (float)dist_To_player / abs(dist_To_player);
         }
 
-        if (playerDead)
+        if (player.dead)
             zombie->current_frame = 3;
 
-        if(zombie->attackPlayer && !zombie->dead && !playerDead)
+        if(zombie->attackPlayer && !zombie->dead && !player.dead)
             if (zombie->current_frame >= 2){
-                if (collisionDetection(player_X, player_Y, 50, ActualSpriteHeightStartY, zombie->x, zombie->y, 50, ActualSpriteHeightStartY)){
-                    playerHealth = (int)playerHealth;
-                    playerHealth -= 15 * delta_time;
-                    playerHealth = (float)playerHealth;
+                if (collisionDetection(player.x, player.y, 50, ActualSpriteHeightStartY, zombie->x, zombie->y, 50, ActualSpriteHeightStartY)){
+                    player.health = (int)player.health;
+                    player.health -= 15 * delta_time;
+                    player.health = (float)player.health;
                 }
             }
 
@@ -1184,7 +1204,7 @@ bool healthBar(int x, int y, float health, bool Player) {
         SDL_SetRenderDrawColor(Renderer, 0, 0, 0, 255);
         SDL_RenderDrawRect(Renderer, &sprintbar);
 
-        sprintbar.w = (playerJumpForce / 100 * 40);
+        sprintbar.w = (player.jumpForce / 100 * 40);
         if (sprintbar.w > 40)
             sprintbar.w = 40;
         SDL_SetRenderDrawColor(Renderer, 50, 50, 255, 255);
