@@ -1,5 +1,5 @@
 CFLAGS = -Wall -g -std=c99
-LIBS   = -lSDL2 -lSDL2_image -lSDL2_ttf
+LIBS   = -lSDL2 -lSDL2_image -lSDL2_ttf -lm
 SOURCE = mainGame.c
 
 ifeq ($(OS),Windows_NT)
