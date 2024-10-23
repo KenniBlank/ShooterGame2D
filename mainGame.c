@@ -32,7 +32,7 @@ int last_frame_time = 0;
 float delta_time = 0.0f; // This is very important dont delete this ever.
 
 typedef struct{
-    bool jumping, goDown, dead, onPlatform, shoot;
+    bool jumping, goDown, dead, onPlatform, shoot, melee;
     float x, y, jumpForce, health, jumpVelocity, shooting_last_frame;
     short int speed, spriteInSpriteSheet, moveLR, current_frame, playerDirection, platformIndex;
 } Player;
@@ -51,6 +51,14 @@ int zombieCount = 0;
 int zombieKilled = 0;
 Zombie *zombies = NULL;
 
+char *items[] = {"bullet", "cash", "health", "nothing"};
+typedef struct{
+    int x, y;
+    int itemIndex;
+} ItemDrop;
+int itemCount = 0;
+ItemDrop *itemDrops = NULL;
+
 typedef struct{
     float x, y;
     bool direction;// True is right and false left
@@ -63,7 +71,6 @@ typedef struct{
     int width, height;
     float x, y;
 } Platform;
-int platformsOnScreen = 0;
 int platformsRendered = 0;
 Platform platforms[MAX_PLATFORMS_TO_BE_RENDERED];
 
@@ -194,6 +201,7 @@ int SetUp(void){
     player.goDown = false;
     player.moveLR = 0;
     player.shoot = false;
+    player.melee = false;
     player.jumpVelocity = -200.0f;
     player.current_frame = 0;
     player.playerDirection = 1;
@@ -277,7 +285,7 @@ void spawnZombies(int numberOfZombies) {
         zombies[zombieCount].idle = true;
         zombies[zombieCount].last_frame_time = SDL_GetTicks();
         zombies[zombieCount].dead = false;
-        zombies[zombieCount].jump = rand() % 2 == 1? true: false;
+        zombies[zombieCount].jump = false;
         zombieCount++;
     }
 }
@@ -498,17 +506,11 @@ void Update(void) {
             else{
                 // TODO: Teleport to platform: change animation to jumping
                 // printf("...\n Platform: %f, Zombie: %d ...\n", platforms[index].y, zombies[i].y);
-
-                // zombies[i].y -= zombies[i].velocityYZombie;
-                // zombies[i].y -= delta_time * 100;
-                // if (zombies[i].y <= platforms[index].y - SPRITE_HEIGHT){
                 if (zombies[i].y == platforms[index].y - SPRITE_HEIGHT)
                     continue;
-                zombies[i].y = platforms[index].y - SPRITE_HEIGHT;
-                //     zombies[i].jump = false;
-                // }
-                zombies[i].x = platforms[index].x + (int)(platforms[index].width / 2);
-                zombies[i].idle = true;
+                // zombies[i].y = platforms[index].y - SPRITE_HEIGHT;
+                // zombies[i].x = platforms[index].x + (int)(platforms[index].width / 2);
+                // zombies[i].idle = true;
             }
         }
     }
@@ -556,7 +558,7 @@ void Update(void) {
             platforms[i].x += parallaxValue;
     }
     distanceTravelledByPlayerFromSpawn += player.moveLR * delta_time * player.speed;
-    printf("%f\n", distanceTravelledByPlayerFromSpawn);
+
     // Healing
     player.health += delta_time;
     if (player.health > 100)
@@ -695,11 +697,7 @@ bool isRectOnTop(SDL_Rect Rect, SDL_Rect dst_rect) {
 }
 
 void platformSpawn(int spawnAmount) {
-    // Check if adding more platforms exceeds the limit
-    if (platformsRendered + spawnAmount > 100)
-        return;
-
-    float maxPlatformHeight = 2.0 / 4 * WINDOW_HEIGHT - ground_height;
+    float maxPlatformHeight = (2.0f / 4.0f) * WINDOW_HEIGHT - ground_height;
 
     // Spawn additional platforms
     for (int i = platformsRendered; i < platformsRendered + spawnAmount; i++) {
@@ -711,10 +709,12 @@ void platformSpawn(int spawnAmount) {
             platforms[i].y = 2.0 / 4 * WINDOW_HEIGHT - ground_height;
 
         platforms[i].height = (WINDOW_HEIGHT - ground_height) - platforms[i].y;
+
         if (rand() % 2 == 1)
-            platforms[i].x = platforms[i].width - 2 + (rand() % (int)(WINDOW_WIDTH / 2) + 50);
+            platforms[i].x = platforms[i].width + 2 + 50 * i;
         else
-            platforms[i].x = -1 * platforms[i].width - 2 + (rand() % (int)(WINDOW_WIDTH / 2) - 50);
+            platforms[i].x = -1 * (platforms[i].width + 2 + 50 * i);
+        continue;
     }
     platformsRendered += spawnAmount;
 
@@ -828,7 +828,7 @@ void playerRender(void) {
         player.spriteInSpriteSheet = 8;
         n = -8;
         mulFactor = 1.5;
-        player.x += player.moveLR * delta_time * player.speed;
+        player.x += player.playerDirection * delta_time * player.speed;
     }
     else if (player.shoot) {
         player.spriteInSpriteSheet = 4;  // frames in shooting animation
@@ -861,7 +861,7 @@ void playerRender(void) {
     if (player.shoot && (SDL_GetTicks() - player.shooting_last_frame) > (120)){
         if (totalBulletInInventory > 0){
             if (src_rect.x != 45 + addFactor * 2.98 * player.current_frame){
-                if (flip == SDL_FLIP_NONE){
+                if (player.playerDirection == 1){
                     bulletData(player.x, player.y, true);
                     player.x -= delta_time * (rand() % 10 + 20);
                 }
@@ -874,6 +874,7 @@ void playerRender(void) {
             }
         }
     }
+
 
     // Only allow the jump animation while in the air
     if (player.jumping || (!player.onPlatform && player.shoot))
@@ -1164,7 +1165,7 @@ void zombieRender(void) {
             if (dist_To_player < -25)
                 zombie->x -= movementSpeed * (float)(-dist_To_player) / abs(dist_To_player) - delta_time * resultOfRandom / 2;
             else if (dist_To_player >= 25)
-                zombie->x += movementSpeed * (float)dist_To_player / abs(dist_To_player);
+                zombie->x += movementSpeed * (float)dist_To_player / abs(dist_To_player) - delta_time * resultOfRandom / 2;
         }
 
         if (player.dead)
