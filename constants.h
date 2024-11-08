@@ -1,4 +1,4 @@
-#define GameTitle "Till You Die"
+#define GameTitle "Dimensions"
 #define WINDOW_WIDTH (900)
 #define WINDOW_HEIGHT (500)
 #define FPS (60)

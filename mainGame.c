@@ -28,7 +28,7 @@ SDL_Renderer* Renderer = NULL;
 
 bool game_is_running = false;
 bool gameIsOver = false;
-int last_frame_time = 0;
+float last_frame_time = 0;
 float delta_time = 0.0f; // This is very important dont delete this ever.
 
 typedef struct{
@@ -55,6 +55,8 @@ char *items[] = {"bullet", "cash", "health", "nothing"};
 typedef struct{
     int x, y;
     int itemIndex;
+    bool onPlatform;
+    float velocity;
 } ItemDrop;
 int itemCount = 0;
 ItemDrop *itemDrops = NULL;
@@ -379,9 +381,9 @@ void ProcessInput(void){
                 switch (event.key.keysym.sym) {
                     case SDLK_ESCAPE:
                         gamePause = !gamePause;
-                        if (gamePause)
+                        if (gamePause){
                             pause_start_time_tick = SDL_GetTicks();
-                        else{
+                        } else{
                             last_frame_time += SDL_GetTicks() - pause_start_time_tick;
                             delta_time = SDL_GetTicks() - last_frame_time;
                             SDL_ShowCursor(SDL_DISABLE);
@@ -473,7 +475,7 @@ int indexOfNearestPlatform(int x, int y){
 
 void Update(void) {
     // IMP: DELAY LOGIC, 60 fps for now.
-    int time_to_wait = FRAME_TARGET_TIME - (SDL_GetTicks() - last_frame_time);
+    int time_to_wait = (int)FRAME_TARGET_TIME - (SDL_GetTicks() - last_frame_time);
     if (time_to_wait > 0 && time_to_wait <= FRAME_TARGET_TIME)
         SDL_Delay(time_to_wait);
 
@@ -515,6 +517,16 @@ void Update(void) {
         }
     }
 
+    for (int i = 0; i < itemCount; i++){
+        itemDrops[i].y += itemDrops[i].velocity;
+        itemDrops[i].velocity = gravity * delta_time;
+        if (itemDrops[i].y > WINDOW_HEIGHT - ground_height - 15){
+            itemDrops[i].y = WINDOW_HEIGHT - ground_height - 15;
+            itemDrops[i].velocity = 0;
+            itemDrops[i].onPlatform = true;
+        }
+    }
+
     // Setting a limit to player zet max reach
     if (player.y <= (-SPRITE_HEIGHT))
         player.y = -SPRITE_HEIGHT;
@@ -532,7 +544,7 @@ void Update(void) {
     if (player.onPlatform)
         player.jumpForce += 20 * delta_time;
 
-    int parallaxValue = delta_time * player.speed;
+    float parallaxValue = (delta_time * player.speed);
     if (player.x > (float)WINDOW_WIDTH * (rightCam/5)){
         background_img_src_rect.x += 100 * delta_time;
         if (background_img_src_rect.x >= background_img_src_rect.w)
@@ -544,6 +556,8 @@ void Update(void) {
             bullets[i].x -= parallaxValue;
         for (int i = 0; i < platformsRendered; i++)
             platforms[i].x -= parallaxValue;
+        for (int i = 0; i < itemCount; i++)
+            itemDrops[i].x -= parallaxValue;
     }
     else if (player.x < (float)WINDOW_WIDTH * (leftCam/5)){
         background_img_src_rect.x -= 50 * delta_time;
@@ -556,9 +570,15 @@ void Update(void) {
             bullets[i].x += parallaxValue;
         for (int i = 0; i < platformsRendered; i++)
             platforms[i].x += parallaxValue;
+        for (int i = 0; i < itemCount; i++)
+            itemDrops[i].x += parallaxValue;
     }
-    distanceTravelledByPlayerFromSpawn += player.moveLR * delta_time * player.speed;
+    for (int i = 0; i < itemCount; i++){
+        itemDrops[i].x += player.x - itemDrops[i].x < 0 ? -1 : 1;
+        itemDrops[i].y += (player.y - itemDrops[i].y < 0 ? -1 : 1) * sqrt(pow(player.x - itemDrops[i].x, 2) + pow(player.y - itemDrops[i].y, 2));
+    }
 
+    distanceTravelledByPlayerFromSpawn += player.moveLR * delta_time * player.speed;
     // Healing
     player.health += delta_time;
     if (player.health > 100)
@@ -574,6 +594,19 @@ void Update(void) {
         player.jumpForce = 0;
     if (player.jumpForce >= 100)
         player.jumpForce = 100;
+
+    // removing items on collision with player
+    for (int i = 0; i < itemCount; i++){
+        bool collided = collisionDetection(itemDrops[i].x, itemDrops[i].y, 50, 20, player.x, player.y, 70, SPRITE_HEIGHT);
+        if (collided)
+            if (itemDrops[i].itemIndex == 0){
+                totalBulletInInventory += 12; // TODO: Animate that
+                // removeItemFromItemDrops();
+                itemDrops[i].itemIndex = 3;
+            }
+    }
+    if (totalBulletInInventory > 999)
+        totalBulletInInventory = 999;
 }
 
 void spawnMainBoss(void){
@@ -644,6 +677,22 @@ void otherRender(void){
     SDL_DestroyTexture(textTexture);
 }
 
+void itemRender(void){
+    for (int i = 0; i < itemCount; i++){
+        if (itemDrops[i].itemIndex == 0){
+            // bullet
+            SDL_Rect src_rect ={0, 0, 900, 450};
+            SDL_Rect dstRect = {0, 0, 20, 10};
+            dstRect.x = itemDrops[i].x;
+            dstRect.y = itemDrops[i].y;
+            for (int j = 0; j < 6; j++){
+                dstRect.x += 5;
+                SDL_RenderCopyEx(Renderer, BulletTexture, &src_rect, &dstRect, -90.0, NULL, SDL_FLIP_NONE);
+            }
+        }
+    }
+}
+
 int last_frame_time_for_idle = 0;
 int addFactor = 43;
 int n = 0;
@@ -682,6 +731,7 @@ void Render(void){
     zombieRender();
     playerRender();
         bulletRender();
+        itemRender();
     spawnMainBoss();
 
     // Render Other:
@@ -748,11 +798,21 @@ void platformRender(void) {
 
         // check if zombie on top of platform
         for (int j = 0; j < zombieCount; j++){
-            SDL_Rect zombieRect = {zombies[j].x + 13, zombies[j].y, 25, SPRITE_HEIGHT};
+            SDL_Rect zombieRect = {zombies[j].x + 13, zombies[j].y, 25, SPRITE_HEIGHT}; // +13 to center the rect
             if (isRectOnTop(zombieRect, dst_rect)) {
                 zombies[j].y = platforms[i].y - SPRITE_HEIGHT;
                 zombies[j].onPlatform = true;
                 zombies[j].velocityYZombie = 0;
+            }
+        }
+
+        // check if items on top of platform
+        for (int j = 0; j < itemCount; j++){
+            SDL_Rect itemRect = {itemDrops[j].x + 13, itemDrops[j].y, 20, 10};
+            if (isRectOnTop(itemRect, dst_rect)){
+                itemDrops[j].y = platforms[i].y - 15;
+                itemDrops[j].onPlatform = true;
+                itemDrops[j].velocity = 0;
             }
         }
 
@@ -1104,11 +1164,31 @@ void zombieRender(void) {
             if (zombie->current_frame == 5){
                 arr = realloc(arr, size * sizeof(int));
                 if (arr == NULL) {
-                    // TODO: Handle Case
+                    // TODO: Handle Case?
                     printf("Memory Allocation failed!");
                     game_is_running = false;
                 }
                 arr[size++] = z;
+
+                if (itemCount == 0) {
+                    itemDrops = malloc(sizeof(ItemDrop));
+                    if (itemDrops == NULL) {
+                        // TODO: Handle this case?
+                        continue;
+                    }
+                    itemCount = 1;
+                } else {
+                    itemCount++;
+                    ItemDrop* temp = realloc(itemDrops, itemCount * sizeof(ItemDrop));
+                    if (temp == NULL) {
+                        // TODO: Handle this case?
+                        continue;
+                    }
+                    itemDrops = temp;
+                }
+                itemDrops[itemCount - 1].x = zombie->x;
+                itemDrops[itemCount - 1].y = zombie->y + SPRITE_HEIGHT - 10;
+                itemDrops[itemCount - 1].itemIndex = 0;
                 continue;
             }
         } else if (zombie->jump){
