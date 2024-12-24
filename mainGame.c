@@ -573,10 +573,18 @@ void Update(void) {
         for (int i = 0; i < itemCount; i++)
             itemDrops[i].x += parallaxValue;
     }
-    for (int i = 0; i < itemCount; i++){
-        itemDrops[i].x += player.x - itemDrops[i].x < 0 ? -1 : 1;
-        itemDrops[i].y += (player.y - itemDrops[i].y < 0 ? -1 : 1) * sqrt(pow(player.x - itemDrops[i].x, 2) + pow(player.y - itemDrops[i].y, 2));
-    }
+    // for (int i = 0; i < itemCount; i++) {
+    //     // Check if item is within range horizontally
+    //     if (abs((int)(player.x - itemDrops[i].x)) > (3 * WINDOW_WIDTH) / 7)
+    //         continue;
+
+    //     // Calculate the distance between item and player
+    //     float dx = player.x - itemDrops[i].x;
+    //     float dy = itemDrops[i].y - (player.y + SPRITE_HEIGHT / 2.0);
+    //     itemDrops[i].velocity = 0;
+    //     itemDrops[i].x += (dx < 0 ? -1 : 1);
+    //     itemDrops[i].y += (dy < 0 ? 1 : -1);
+    // }
 
     distanceTravelledByPlayerFromSpawn += player.moveLR * delta_time * player.speed;
     // Healing
@@ -1187,7 +1195,7 @@ void zombieRender(void) {
                     itemDrops = temp;
                 }
                 itemDrops[itemCount - 1].x = zombie->x;
-                itemDrops[itemCount - 1].y = zombie->y + SPRITE_HEIGHT - 10;
+                itemDrops[itemCount - 1].y = zombie->y + SPRITE_HEIGHT - 30;
                 itemDrops[itemCount - 1].itemIndex = 0;
                 continue;
             }
